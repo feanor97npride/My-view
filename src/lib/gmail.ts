@@ -94,7 +94,7 @@ export async function syncEmails(token: string) {
       const old = knownMap.get(m.id);
       let category = old?.category as Category | undefined;
       let by = old?.classified_by as string | undefined;
-      if (!category) {
+      if (!category || by === "fallback") {
         const rule = ruleCategory(sender, subject);
         const ai = rule ? null : await classifyWithAI(sender, subject);
         category = rule ?? ai ?? "informativo";
