@@ -117,7 +117,8 @@ export async function syncEmails(token: string) {
       INSERT INTO emails (id, sender, subject, received_at, unread, category, classified_by, updated_at)
       SELECT id, sender, subject, received_at, unread, category, classified_by, now()
       FROM json_populate_recordset(NULL::emails, ${JSON.stringify(rows)})
-      ON CONFLICT (id) DO UPDATE SET unread = EXCLUDED.unread, updated_at = now()`;
+      ON CONFLICT (id) DO UPDATE SET unread = EXCLUDED.unread, category = EXCLUDED.category,
+        classified_by = EXCLUDED.classified_by, updated_at = now()`;
   }
 
   const actions = await sql`
