@@ -54,7 +54,7 @@ export function toEvent(e: GEvent, calendar: string): CalEvent {
 
 async function get<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-  if (!res.ok) throw new Error(`Google Calendar ${res.status}`);
+  if (!res.ok) throw new Error(`Google Calendar ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res.json();
 }
 
