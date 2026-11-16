@@ -37,7 +37,7 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: "claude-haiku-5-5",
-        max_tokens: 200, // room for any non-text block before the answer
+        max_tokens: 1024, // the model may emit a thinking block first; 200 was not always enough for the answer to follow
         messages: [
           {
             role: "user",
