@@ -139,8 +139,14 @@ export async function syncEmails(token: string) {
   const actions = await sql`
     SELECT sender, subject, received_at FROM emails
     WHERE category = 'acao' AND unread ORDER BY received_at DESC LIMIT 10`;
-  const counts = await sql`
+  return { actions, counts: await emailCounts() };
+}
+
+// E-mails per category over the last 7 days, read from the database (no Gmail call).
+export async function emailCounts(): Promise<Record<string, number>> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  const rows = await sql`
     SELECT category, COUNT(*)::int AS n FROM emails
     WHERE received_at > now() - interval '7 days' GROUP BY category`;
-  return { actions, counts: Object.fromEntries(counts.map((c) => [c.category, c.n])) as Record<string, number> };
+  return Object.fromEntries(rows.map((c) => [c.category, c.n]));
 }

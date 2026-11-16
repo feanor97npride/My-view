@@ -19,7 +19,10 @@ export default async function Home() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-4">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Hoje</h1>
-        <Link href="/semana" className="text-sm underline">Semana</Link>
+        <nav className="flex gap-4 text-sm">
+          <Link href="/semana" className="underline">Semana</Link>
+          <Link href="/indicadores" className="underline">Indicadores</Link>
+        </nav>
         <form
           action={async () => {
             "use server";

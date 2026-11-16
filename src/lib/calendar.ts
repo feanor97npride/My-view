@@ -58,6 +58,11 @@ async function get<T>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
+export async function primaryTz(token: string): Promise<string> {
+  const { items } = await get<{ items: { primary?: boolean; timeZone?: string }[] }>("/users/me/calendarList", token);
+  return items.find((c) => c.primary)?.timeZone ?? "UTC";
+}
+
 // Hours covered by timed events, counting overlaps once.
 export function busyHours(events: CalEvent[]): number {
   const iv = events
