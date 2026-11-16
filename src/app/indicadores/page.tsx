@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { primaryTz } from "@/lib/calendar";
-import { completedDates, countByDay, openTasks } from "@/lib/clickup";
+import { canonicalStatus, completedDates, countByDay, openTasks } from "@/lib/clickup";
 import { emailCounts } from "@/lib/gmail";
 import { CategoryBars, DoneTrend, StatusPie } from "./charts";
 
@@ -17,7 +17,7 @@ export default async function Indicadores() {
   ]);
 
   const byStatus = Array.isArray(tasks)
-    ? Object.entries(Object.groupBy(tasks, (t) => t.status)).map(([name, list]) => ({ name, value: list?.length ?? 0 }))
+    ? Object.entries(Object.groupBy(tasks, (t) => canonicalStatus(t.status))).map(([name, list]) => ({ name, value: list?.length ?? 0 }))
     : [];
   const overdue = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue").length : 0;
   const today = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "today").length : 0;

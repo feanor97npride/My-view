@@ -9,7 +9,6 @@ const CATEGORY_COLOR: Record<string, string> = {
   acao: "#8b5cf6", financeiro: "#10b981", agendamento: "#3b82f6", trabalho: "#f59e0b",
   pessoal: "#ec4899", aguardando: "#14b8a6", informativo: "#9ca3af",
 };
-const legendText = (value: string) => <span style={{ color: "var(--foreground)" }}>{value}</span>;
 
 export function StatusPie({ data }: { data: { name: string; value: number }[] }) {
   return (
@@ -20,7 +19,13 @@ export function StatusPie({ data }: { data: { name: string; value: number }[] })
             {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
           </Pie>
           <Tooltip />
-          <Legend formatter={legendText} />
+          <Legend
+            formatter={(value, entry) => (
+              <span style={{ color: "var(--foreground)" }}>
+                {value}: {(entry.payload as { value?: number } | undefined)?.value}
+              </span>
+            )}
+          />
         </PieChart>
       </ResponsiveContainer>
     </div>

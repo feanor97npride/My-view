@@ -28,6 +28,16 @@ type RawTask = {
   list: { name: string };
 };
 
+// Statuses that mean the same across lists, merged in charts only.
+// shortcut: hand-kept map, add an entry when a list gets a new status name.
+const STATUS_ALIAS: Record<string, string> = {
+  "in progress": "Em andamento",
+  "em progresso": "Em andamento",
+  "to do": "A fazer",
+  pendente: "A fazer",
+};
+export const canonicalStatus = (s: string) => STATUS_ALIAS[s.trim().toLowerCase()] ?? s;
+
 const isClosed = (t: RawTask) => ["closed", "done"].includes(t.status.type);
 
 // Groups a task by how urgent it is relative to `now` (ms epoch of the due date).
