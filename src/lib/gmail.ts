@@ -41,10 +41,14 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
         ],
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`); // logs the reason, never the key
+      return null;
+    }
     const j = (await res.json()) as { content?: { text?: string }[] };
     return parseCategory(j.content?.[0]?.text ?? "");
-  } catch {
+  } catch (e) {
+    console.error("Anthropic call failed:", e instanceof Error ? e.message : e);
     // shortcut: any AI failure falls back to "informativo" so one bad key never blocks the inbox, upgrade to a retry queue when it matters
     return null;
   }
