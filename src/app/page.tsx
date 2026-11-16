@@ -1,10 +1,13 @@
 import { auth, signOut } from "@/auth";
 import { todayTimeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
+import { syncEmails } from "@/lib/gmail";
 
 export default async function Home() {
   const session = await auth();
   const today = session?.accessToken ? await todayTimeline(session.accessToken) : null;
+  // shortcut: a Gmail failure shows a note instead of breaking the rest of the page
+  const mail = session?.accessToken ? await syncEmails(session.accessToken).catch((e: Error) => e) : null;
   // shortcut: a ClickUp failure shows a note instead of breaking the calendar section
   const tasks = await openTasks().catch((e: Error) => e);
   const urgent = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today") : [];
@@ -54,6 +57,24 @@ export default async function Home() {
             <p className="font-medium">{t.title}</p>
           </div>
         ))}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">E-mails (últimos 7 dias)</h2>
+        {mail instanceof Error && <p className="text-sm opacity-70">Gmail indisponível: {mail.message}</p>}
+        {mail && !(mail instanceof Error) && (
+          <>
+            <p className="text-sm">
+              {Object.entries(mail.counts).map(([c, n]) => `${c}: ${n}`).join(" · ") || "Nenhum e-mail recente."}
+            </p>
+            {mail.actions.map((m, i) => (
+              <div key={i} className="rounded-lg border-l-4 border-violet-500 bg-black/5 p-3 dark:bg-white/10">
+                <p className="text-sm opacity-70">{m.sender}</p>
+                <p className="font-medium">{m.subject}</p>
+              </div>
+            ))}
+          </>
+        )}
       </section>
     </main>
   );
