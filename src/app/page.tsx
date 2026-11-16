@@ -1,11 +1,12 @@
 import { auth, signOut } from "@/auth";
-import { todayTimeline } from "@/lib/calendar";
+import Link from "next/link";
+import { timeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
 import { syncEmails } from "@/lib/gmail";
 
 export default async function Home() {
   const session = await auth();
-  const today = session?.accessToken ? await todayTimeline(session.accessToken) : null;
+  const today = session?.accessToken ? await timeline(session.accessToken) : null;
   // shortcut: a Gmail failure shows a note instead of breaking the rest of the page
   const mail = session?.accessToken ? await syncEmails(session.accessToken).catch((e: Error) => e) : null;
   // shortcut: a ClickUp failure shows a note instead of breaking the calendar section
@@ -18,6 +19,7 @@ export default async function Home() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-4">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Hoje</h1>
+        <Link href="/semana" className="text-sm underline">Semana</Link>
         <form
           action={async () => {
             "use server";

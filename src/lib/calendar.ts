@@ -58,13 +58,31 @@ async function get<T>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
-export async function todayTimeline(token: string, now = new Date()) {
+// Hours covered by timed events, counting overlaps once.
+export function busyHours(events: CalEvent[]): number {
+  const iv = events
+    .filter((e) => !e.allDay)
+    .map((e) => [e.start.getTime(), e.end.getTime()])
+    .sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let end = -Infinity;
+  for (const [s, e] of iv) {
+    if (e <= end) continue;
+    total += e - Math.max(s, end);
+    end = e;
+  }
+  return total / 3_600_000;
+}
+
+// Events from the start of today through the end of day `days` (1 = today only).
+export async function timeline(token: string, now = new Date(), days = 1) {
   const { items } = await get<{ items: { id: string; summary: string; primary?: boolean; timeZone?: string }[] }>(
     "/users/me/calendarList",
     token,
   );
   const tz = items.find((c) => c.primary)?.timeZone ?? "UTC";
-  const { start, end } = dayWindow(now, tz);
+  const start = dayWindow(now, tz).start;
+  const end = dayWindow(new Date(now.getTime() + (days - 1) * 86_400_000), tz).end;
   const q = `singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}`;
   // shortcut: a calendar that fails is skipped silently, so one bad calendar does not blank the whole day
   const lists = await Promise.all(
