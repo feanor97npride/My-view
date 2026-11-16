@@ -37,7 +37,7 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: "claude-haiku-5-5",
-        max_tokens: 10,
+        max_tokens: 200, // room for any non-text block before the answer
         messages: [
           {
             role: "user",
@@ -47,8 +47,10 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
       }),
     });
     if (!res.ok) return `http${res.status}`;
-    const j = (await res.json()) as { content?: { text?: string }[] };
-    return parseCategory(j.content?.[0]?.text ?? "") ?? "badreply";
+    // Reads the text block wherever it is; records block types when no category is found, to diagnose the reply shape.
+    const j = (await res.json()) as { content?: { type: string; text?: string }[] };
+    const text = j.content?.find((b) => b.type === "text")?.text ?? "";
+    return parseCategory(text) ?? `badreply:${(j.content ?? []).map((b) => b.type).join("+") || "empty"}`;
   } catch {
     // shortcut: any AI failure falls back to "informativo" so one bad key never blocks the inbox, upgrade to a retry queue when it matters
     return "network";
