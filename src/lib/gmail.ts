@@ -24,25 +24,30 @@ export function parseCategory(text: string): Category | null {
 }
 
 async function classifyWithAI(sender: string, subject: string): Promise<Category | null> {
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
   if (!key) return null;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-haiku-5-5",
-      max_tokens: 10,
-      messages: [
-        {
-          role: "user",
-          content: `Classifique este e-mail em UMA palavra: ${CATEGORIES.join(", ")}.\nacao = precisa de ação do destinatário; aguardando = espera resposta; trabalho = relacionado a trabalho; pessoal = relacionamentos e vida pessoal; informativo = só para saber.\nRemetente: ${sender}\nAssunto: ${subject}`,
-        },
-      ],
-    }),
-  });
-  if (!res.ok) return null;
-  const j = (await res.json()) as { content?: { text?: string }[] };
-  return parseCategory(j.content?.[0]?.text ?? "");
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-5-5",
+        max_tokens: 10,
+        messages: [
+          {
+            role: "user",
+            content: `Classifique este e-mail em UMA palavra: ${CATEGORIES.join(", ")}.\nacao = precisa de ação do destinatário; aguardando = espera resposta; trabalho = relacionado a trabalho; pessoal = relacionamentos e vida pessoal; informativo = só para saber.\nRemetente: ${sender}\nAssunto: ${subject}`,
+          },
+        ],
+      }),
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { content?: { text?: string }[] };
+    return parseCategory(j.content?.[0]?.text ?? "");
+  } catch {
+    // shortcut: any AI failure falls back to "informativo" so one bad key never blocks the inbox, upgrade to a retry queue when it matters
+    return null;
+  }
 }
 
 type GMsg = {
