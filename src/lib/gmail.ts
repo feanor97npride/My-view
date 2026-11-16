@@ -21,10 +21,10 @@ export function isCategory(x: unknown): x is Category {
   return typeof x === "string" && (CATEGORIES as readonly string[]).includes(x);
 }
 
-// Accepts only a known category word from the model's reply.
+// Finds a known category in the model's reply, ignoring accents and case ("Ação." -> acao).
 export function parseCategory(text: string): Category | null {
-  const word = text.trim().toLowerCase().replace(/[^a-z]/g, "");
-  return (CATEGORIES as readonly string[]).includes(word) ? (word as Category) : null;
+  const norm = text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return CATEGORIES.find((c) => norm.includes(c)) ?? null;
 }
 
 // Returns a category, or a short error code (stored in classified_by so failures are visible in the database).

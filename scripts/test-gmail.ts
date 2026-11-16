@@ -9,6 +9,8 @@ assert.equal(ruleCategory("news@loja.com", "Oferta da semana"), null); // left t
 
 assert.equal(parseCategory("trabalho"), "trabalho");
 assert.equal(parseCategory(" Aguardando.\n"), "aguardando");
+assert.equal(parseCategory("Ação."), "acao");
+assert.equal(parseCategory("Categoria: Financeiro"), "financeiro");
 assert.equal(parseCategory("não sei"), null);
 
 console.log("gmail: ok");
