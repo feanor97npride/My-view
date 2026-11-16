@@ -90,31 +90,31 @@ export async function syncEmails(token: string) {
   const knownMap = new Map(known.map((r) => [r.id as string, r]));
 
   // Each message is classified once; later loads only refresh the unread flag.
-  const rows = await Promise.all(
-    msgs.map(async (m) => {
-      const h = (n: string) => m.payload.headers.find((x) => x.name === n)?.value ?? "";
-      const sender = h("From");
-      const subject = h("Subject") || "(sem assunto)";
-      const old = knownMap.get(m.id);
-      let category = old?.category as Category | undefined;
-      let by = old?.classified_by as string | undefined;
-      if (!category || by === "fallback") {
-        const rule = ruleCategory(sender, subject);
-        const ai = rule ? null : await classifyWithAI(sender, subject);
-        category = rule ?? ai ?? "informativo";
-        by = rule ? "rule" : ai ? "ai" : "fallback"; // fallback: no key or model error
-      }
-      return {
-        id: m.id,
-        sender,
-        subject,
-        received_at: new Date(Number(m.internalDate)).toISOString(),
-        unread: m.labelIds?.includes("UNREAD") ?? false,
-        category,
-        classified_by: by,
-      };
-    }),
-  );
+  // Sequential on purpose: parallel bursts hit the API rate limit and fall back to "informativo".
+  const rows: Record<string, unknown>[] = [];
+  for (const m of msgs) {
+    const h = (n: string) => m.payload.headers.find((x) => x.name === n)?.value ?? "";
+    const sender = h("From");
+    const subject = h("Subject") || "(sem assunto)";
+    const old = knownMap.get(m.id);
+    let category = old?.category as Category | undefined;
+    let by = old?.classified_by as string | undefined;
+    if (!category || by === "fallback") {
+      const rule = ruleCategory(sender, subject);
+      const ai = rule ? null : await classifyWithAI(sender, subject);
+      category = rule ?? ai ?? "informativo";
+      by = rule ? "rule" : ai ? "ai" : "fallback"; // fallback: no key or model error
+    }
+    rows.push({
+      id: m.id,
+      sender,
+      subject,
+      received_at: new Date(Number(m.internalDate)).toISOString(),
+      unread: m.labelIds?.includes("UNREAD") ?? false,
+      category,
+      classified_by: by,
+    });
+  }
 
   if (rows.length) {
     await sql`
