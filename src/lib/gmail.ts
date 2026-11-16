@@ -17,15 +17,20 @@ export function ruleCategory(sender: string, subject: string): Category | null {
   return RULES.find(([, re]) => re.test(text))?.[0] ?? null;
 }
 
+export function isCategory(x: unknown): x is Category {
+  return typeof x === "string" && (CATEGORIES as readonly string[]).includes(x);
+}
+
 // Accepts only a known category word from the model's reply.
 export function parseCategory(text: string): Category | null {
   const word = text.trim().toLowerCase().replace(/[^a-z]/g, "");
   return (CATEGORIES as readonly string[]).includes(word) ? (word as Category) : null;
 }
 
-async function classifyWithAI(sender: string, subject: string): Promise<Category | null> {
+// Returns a category, or a short error code (stored in classified_by so failures are visible in the database).
+async function classifyWithAI(sender: string, subject: string): Promise<Category | string> {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!key) return null;
+  if (!key) return "nokey";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -41,16 +46,12 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
         ],
       }),
     });
-    if (!res.ok) {
-      console.error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`); // logs the reason, never the key
-      return null;
-    }
+    if (!res.ok) return `http${res.status}`;
     const j = (await res.json()) as { content?: { text?: string }[] };
-    return parseCategory(j.content?.[0]?.text ?? "");
-  } catch (e) {
-    console.error("Anthropic call failed:", e instanceof Error ? e.message : e);
+    return parseCategory(j.content?.[0]?.text ?? "") ?? "badreply";
+  } catch {
     // shortcut: any AI failure falls back to "informativo" so one bad key never blocks the inbox, upgrade to a retry queue when it matters
-    return null;
+    return "network";
   }
 }
 
@@ -99,11 +100,19 @@ export async function syncEmails(token: string) {
     const old = knownMap.get(m.id);
     let category = old?.category as Category | undefined;
     let by = old?.classified_by as string | undefined;
-    if (!category || by === "fallback") {
+    if (!category || by?.startsWith("fallback")) {
       const rule = ruleCategory(sender, subject);
-      const ai = rule ? null : await classifyWithAI(sender, subject);
-      category = rule ?? ai ?? "informativo";
-      by = rule ? "rule" : ai ? "ai" : "fallback"; // fallback: no key or model error
+      const ai = rule ? "" : await classifyWithAI(sender, subject);
+      if (rule) {
+        category = rule;
+        by = "rule";
+      } else if (isCategory(ai)) {
+        category = ai;
+        by = "ai";
+      } else {
+        category = "informativo";
+        by = `fallback:${ai}`;
+      }
     }
     rows.push({
       id: m.id,
