@@ -13,7 +13,7 @@ export default function WeekChart({ data }: { data: DayLoad[] }) {
           <XAxis dataKey="day" />
           <YAxis unit="h" />
           <Tooltip formatter={(v) => `${Number(v).toFixed(1)}h`} />
-          <Legend />
+          <Legend formatter={(value) => <span style={{ color: "var(--foreground)" }}>{value}</span>} />
           <Bar dataKey="ocupado" stackId="a" fill="#3b82f6" name="Ocupado" />
           <Bar dataKey="livre" stackId="a" fill="#d1d5db" name="Livre (de 12h)" />
         </BarChart>
