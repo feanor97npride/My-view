@@ -35,6 +35,7 @@ const STATUS_ALIAS: Record<string, string> = {
   "em progresso": "Em andamento",
   "to do": "A fazer",
   pendente: "A fazer",
+  "eu - pendente": "A fazer",
 };
 export const canonicalStatus = (s: string) => STATUS_ALIAS[s.trim().toLowerCase()] ?? s;
 

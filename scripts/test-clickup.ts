@@ -24,7 +24,7 @@ assert.equal(canonicalStatus("In Progress"), "Em andamento");
 assert.equal(canonicalStatus("em progresso"), "Em andamento");
 assert.equal(canonicalStatus(" pendente "), "A fazer");
 assert.equal(canonicalStatus("to do"), "A fazer");
-assert.equal(canonicalStatus("eu - pendente"), "eu - pendente"); // not merged: different meaning
+assert.equal(canonicalStatus("eu - pendente"), "A fazer");
 assert.equal(canonicalStatus("on hold"), "on hold");
 
 console.log("clickup: ok");
