@@ -58,6 +58,22 @@ async function get<T>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
+export type CalendarInfo = { id: string; name: string; primary: boolean };
+
+export async function listCalendars(token: string): Promise<CalendarInfo[]> {
+  const { items } = await get<{ items: { id: string; summary: string; summaryOverride?: string; primary?: boolean }[] }>(
+    "/users/me/calendarList",
+    token,
+  );
+  return items.map((c) => ({ id: c.id, name: c.summaryOverride ?? c.summary, primary: !!c.primary }));
+}
+
+// Calendars to show: the chosen ones that still exist, or all when no valid choice is saved.
+export function pickCalendars<T extends { id: string }>(all: T[], selected: string[] | null | undefined): T[] {
+  const chosen = selected?.length ? all.filter((c) => selected.includes(c.id)) : [];
+  return chosen.length ? chosen : all;
+}
+
 export async function primaryTz(token: string): Promise<string> {
   const { items } = await get<{ items: { primary?: boolean; timeZone?: string }[] }>("/users/me/calendarList", token);
   return items.find((c) => c.primary)?.timeZone ?? "UTC";
@@ -80,7 +96,7 @@ export function busyHours(events: CalEvent[]): number {
 }
 
 // Events from the start of today through the end of day `days` (1 = today only).
-export async function timeline(token: string, now = new Date(), days = 1) {
+export async function timeline(token: string, now = new Date(), days = 1, selected?: string[] | null) {
   const { items } = await get<{ items: { id: string; summary: string; primary?: boolean; timeZone?: string }[] }>(
     "/users/me/calendarList",
     token,
@@ -91,7 +107,7 @@ export async function timeline(token: string, now = new Date(), days = 1) {
   const q = `singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}`;
   // shortcut: a calendar that fails is skipped silently, so one bad calendar does not blank the whole day
   const lists = await Promise.all(
-    items.map((c) =>
+    pickCalendars(items, selected).map((c) =>
       get<{ items: GEvent[] }>(`/calendars/${encodeURIComponent(c.id)}/events?${q}`, token)
         .then((r) => r.items.filter((e) => e.status !== "cancelled").map((e) => toEvent(e, c.summary)))
         .catch(() => []),

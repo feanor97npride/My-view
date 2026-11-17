@@ -1,13 +1,15 @@
 import { auth } from "@/auth";
 import { busyHours, timeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
+import { getSelectedCalendars } from "@/lib/prefs";
 import WeekChart from "./week-chart";
 
 const DAY = 86_400_000;
 
 export default async function Semana() {
   const session = await auth();
-  const week = session?.accessToken ? await timeline(session.accessToken, new Date(), 7) : null;
+  const selected = await getSelectedCalendars().catch(() => null);
+  const week = session?.accessToken ? await timeline(session.accessToken, new Date(), 7, selected) : null;
   // shortcut: a ClickUp failure shows a note instead of breaking the calendar view
   const tasks = await openTasks().catch((e: Error) => e);
 

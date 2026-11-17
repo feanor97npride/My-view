@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types --no-warnings scripts/test-calendar.ts
 import assert from "node:assert/strict";
-import { busyHours, dayWindow, toEvent } from "../src/lib/calendar.ts";
+import { busyHours, dayWindow, pickCalendars, toEvent } from "../src/lib/calendar.ts";
 
 // Sao Paulo (UTC-3, no DST): 12:00 local on 16 Nov = 15:00Z
 let w = dayWindow(new Date("2026-11-16T15:00:00Z"), "America/Sao_Paulo");
@@ -25,5 +25,12 @@ const ev = (s: string, e: string, allDay = false) => ({ id: s, title: "x", calen
 assert.equal(busyHours([ev("2026-11-16T10:00:00Z", "2026-11-16T12:00:00Z"), ev("2026-11-16T11:00:00Z", "2026-11-16T13:00:00Z"), ev("2026-11-16T14:00:00Z", "2026-11-16T15:00:00Z")]), 4);
 assert.equal(busyHours([ev("2026-11-16T00:00:00Z", "2026-11-17T00:00:00Z", true)]), 0); // all-day does not count
 assert.equal(busyHours([]), 0);
+
+// pickCalendars: chosen ones that still exist; falls back to all when nothing valid is saved
+const cals = [{ id: "a" }, { id: "b" }, { id: "c" }];
+assert.deepEqual(pickCalendars(cals, ["a", "c"]), [{ id: "a" }, { id: "c" }]);
+assert.deepEqual(pickCalendars(cals, null), cals);
+assert.deepEqual(pickCalendars(cals, []), cals);
+assert.deepEqual(pickCalendars(cals, ["gone"]), cals); // saved id no longer exists -> show all, never blank
 
 console.log("calendar: ok");

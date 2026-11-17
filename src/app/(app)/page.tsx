@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { timeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
 import { syncEmails } from "@/lib/gmail";
+import { getSelectedCalendars } from "@/lib/prefs";
 
 const KPI_ICONS = {
   agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
@@ -30,7 +31,8 @@ function Kpi({ label, value, hint, icon, tone }: { label: string; value: string 
 
 export default async function Home() {
   const session = await auth();
-  const today = session?.accessToken ? await timeline(session.accessToken) : null;
+  const selected = await getSelectedCalendars().catch(() => null);
+  const today = session?.accessToken ? await timeline(session.accessToken, new Date(), 1, selected) : null;
   // shortcut: a ClickUp or Gmail failure shows a note instead of breaking the rest of the page
   const tasks = await openTasks().catch((e: Error) => e);
   const mail = session?.accessToken ? await syncEmails(session.accessToken).catch((e: Error) => e) : null;

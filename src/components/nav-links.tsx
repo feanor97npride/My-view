@@ -7,6 +7,11 @@ const LINKS = [
   { href: "/", label: "Hoje", icon: "M3 4h18v17H3zM8 2v4M16 2v4M3 10h18" },
   { href: "/semana", label: "Semana", icon: "M3 4h18v17H3zM8 2v4M16 2v4M3 10h18M8 14h2M14 14h2M8 18h2" },
   { href: "/indicadores", label: "Indicadores", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
+  {
+    href: "/configuracoes",
+    label: "Config.",
+    icon: "M3 6h9M16 6h5M3 12h5M12 12h9M3 18h11M18 18h3M14 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M10 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M16 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0",
+  },
 ];
 
 export default function NavLinks({ variant }: { variant: "side" | "bottom" }) {
@@ -15,7 +20,7 @@ export default function NavLinks({ variant }: { variant: "side" | "bottom" }) {
   return (
     <nav
       aria-label="Principal"
-      className={side ? "flex flex-col gap-1.5" : "fixed inset-x-0 bottom-0 z-10 grid grid-cols-3 border-t border-line bg-card px-2 pb-3 pt-2 md:hidden"}
+      className={side ? "flex flex-col gap-1.5" : "fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-line bg-card px-2 pb-3 pt-2 md:hidden"}
     >
       {LINKS.map((l) => {
         const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
