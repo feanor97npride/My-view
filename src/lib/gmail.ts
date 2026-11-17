@@ -1,6 +1,7 @@
 // Read-only Gmail metadata (sender, subject, date, unread) classified into categories.
-// Bodies are never fetched or stored.
+// Bodies are never fetched or stored. The short Gmail snippet is shown in the list but kept in memory only.
 import { neon } from "@neondatabase/serverless";
+import type { EmailItem } from "./email-view";
 
 export const CATEGORIES = ["acao", "financeiro", "agendamento", "trabalho", "pessoal", "aguardando", "informativo"] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -59,6 +60,8 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
 
 type GMsg = {
   id: string;
+  threadId: string;
+  snippet?: string;
   internalDate: string;
   labelIds?: string[];
   payload: { headers: { name: string; value: string }[] };
@@ -95,6 +98,7 @@ export async function syncEmails(token: string) {
   // Each message is classified once; later loads only refresh the unread flag.
   // Sequential on purpose: parallel bursts hit the API rate limit and fall back to "informativo".
   const rows: Record<string, unknown>[] = [];
+  const emails: EmailItem[] = [];
   for (const m of msgs) {
     const h = (n: string) => m.payload.headers.find((x) => x.name === n)?.value ?? "";
     const sender = h("From");
@@ -116,14 +120,18 @@ export async function syncEmails(token: string) {
         by = `fallback:${ai}`;
       }
     }
-    rows.push({
+    const receivedAt = new Date(Number(m.internalDate));
+    const unread = m.labelIds?.includes("UNREAD") ?? false;
+    rows.push({ id: m.id, sender, subject, received_at: receivedAt.toISOString(), unread, category, classified_by: by });
+    emails.push({
       id: m.id,
+      threadId: m.threadId,
       sender,
       subject,
-      received_at: new Date(Number(m.internalDate)).toISOString(),
-      unread: m.labelIds?.includes("UNREAD") ?? false,
+      receivedAt,
+      unread,
       category,
-      classified_by: by,
+      snippet: m.snippet ?? "", // raw: still HTML-encoded, decoded where it is displayed
     });
   }
 
@@ -139,7 +147,7 @@ export async function syncEmails(token: string) {
   const actions = await sql`
     SELECT sender, subject, received_at FROM emails
     WHERE category = 'acao' AND unread ORDER BY received_at DESC LIMIT 10`;
-  return { actions, counts: await emailCounts() };
+  return { actions, counts: await emailCounts(), emails: emails.sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime()) };
 }
 
 // E-mails per category over the last 7 days, read from the database (no Gmail call).
