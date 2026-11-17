@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { timeline } from "@/lib/calendar";
+import LiveMeeting from "@/components/live-meeting";
+import { busyHours, timeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
+import { staticAlerts, summarize } from "@/lib/day-summary";
 import { syncEmails } from "@/lib/gmail";
 import { getSelectedCalendars } from "@/lib/prefs";
 
@@ -51,6 +53,28 @@ export default async function Home() {
   const actions = mail && !(mail instanceof Error) ? mail.actions : [];
   const nextEvent = today?.events.find((e) => !e.allDay && e.start > now);
 
+  // Summary and alerts: a source that failed is null, so it is left out instead of showing a false zero.
+  const tasksOk = Array.isArray(tasks);
+  const mailOk = !!mail && !(mail instanceof Error);
+  const oldestOverdueDays = Array.isArray(tasks)
+    ? Math.max(0, ...tasks.filter((t) => t.bucket === "overdue" && t.due).map((t) => Math.floor((now.getTime() - t.due!.getTime()) / 86_400_000)))
+    : 0;
+  const counts = {
+    overdue: tasksOk ? overdue : null,
+    dueToday: tasksOk ? dueToday : null,
+    actionEmails: mailOk ? actions.length : null,
+  };
+  const summary = summarize({
+    eventsCount: today ? today.events.length : null,
+    busyHours: today ? busyHours(today.events) : 0,
+    nextEventTime: nextEvent ? fmt(nextEvent.start) : null,
+    ...counts,
+  });
+  const alerts = staticAlerts({ ...counts, oldestOverdueDays });
+  const timed = (today?.events ?? [])
+    .filter((e) => !e.allDay && e.end > now)
+    .map((e) => ({ id: e.id, title: e.title, start: e.start.toISOString(), end: e.end.toISOString() }));
+
   const state = (e: { allDay: boolean; start: Date; end: Date }) =>
     e.allDay ? "next" : e.end < now ? "done" : e.start <= now ? "now" : "next";
   const cardClass = { done: "border-line bg-bg text-mute", now: "border-2 border-primary bg-primary-soft", next: "border-line-strong bg-card" };
@@ -64,6 +88,25 @@ export default async function Home() {
           {greeting}{first && `, ${first}`}
         </h1>
       </header>
+
+      <section aria-label="Resumo do dia" className="card flex flex-col gap-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-display text-xl font-semibold">Resumo do dia</h2>
+          <span className="text-xs text-mute">
+            Atualizado às {fmt(now)} · <Link href="/">Atualizar</Link>
+          </span>
+        </div>
+        {summary && <p className="m-0">{summary}</p>}
+        <div className="flex flex-col gap-1 empty:hidden">
+          <LiveMeeting events={timed} serverNow={now.toISOString()} />
+          {alerts.map((a) => (
+            <Link key={a.id} href={a.href} className="flex flex-wrap items-center gap-2.5 rounded-xl px-3 py-2 text-ink no-underline hover:bg-primary-soft">
+              <span className={`chip chip-${a.tone}`}>{a.label}</span>
+              <span className="font-medium">{a.text}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       <section aria-label="Resumo" className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
         <Kpi label="Compromissos hoje" value={today ? today.events.length : "–"} hint={nextEvent ? `Próximo às ${fmt(nextEvent.start)}` : "Nada mais hoje"} icon={KPI_ICONS.agenda} tone="chip-blue" />
