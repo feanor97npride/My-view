@@ -2,7 +2,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { listCalendars, pickCalendars } from "@/lib/calendar";
-import { getSelectedCalendars, setSelectedCalendars } from "@/lib/prefs";
+import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
+import { CATEGORY_CHIP, CATEGORY_LABEL } from "@/lib/email-view";
+import { getEmailRules, getSelectedCalendars, setEmailRules, setSelectedCalendars } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -17,17 +19,53 @@ async function save(formData: FormData) {
   redirect("/configuracoes?salvo=1");
 }
 
-export default async function Configuracoes({ searchParams }: { searchParams: Promise<{ salvo?: string; erro?: string }> }) {
+async function addRule(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const rule = normalizeRule({ match: String(formData.get("match") ?? ""), category: String(formData.get("category") ?? "") });
+  if (!rule) redirect("/configuracoes?regra=invalida");
+  const others = (await getEmailRules()).filter((r) => r.match !== rule.match); // same sender again replaces its category
+  if (others.length >= MAX_RULES) redirect("/configuracoes?regra=cheia");
+  await setEmailRules([...others, rule]);
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?regra=ok");
+}
+
+async function removeRule(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const match = String(formData.get("match") ?? "");
+  await setEmailRules((await getEmailRules()).filter((r) => r.match !== match));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?regra=removida");
+}
+
+const RULE_MESSAGE: Record<string, [string, string]> = {
+  ok: ["chip-green", "Regra salva. Vale para os e-mails da lista na próxima abertura."],
+  removida: ["chip-green", "Regra removida."],
+  invalida: ["chip-red", "Use um domínio (empresa.com) ou um e-mail (pessoa@empresa.com)."],
+  cheia: ["chip-red", `Limite de ${MAX_RULES} regras atingido. Remova alguma antes de adicionar.`],
+};
+
+export default async function Configuracoes({
+  searchParams,
+}: {
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string }>;
+}) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
     return <main className="p-6">Entre de novo para reconectar o Google Calendar.</main>;
   }
 
-  const [all, selected] = await Promise.all([
+  const [all, selected, rules] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
+    getEmailRules().catch(() => []),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
+  const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-4 md:p-10">
@@ -62,6 +100,58 @@ export default async function Configuracoes({ searchParams }: { searchParams: Pr
           <button type="submit" className="btn btn-primary">Salvar</button>
         </div>
       </form>
+
+      <section className="card flex flex-col gap-4">
+        <div>
+          <h2 className="font-display text-xl font-semibold">Regras de e-mail</h2>
+          <p className="text-sm text-mute">
+            Fixe a categoria de um remetente. Um domínio (empresa.com) também vale para os subdomínios. Suas regras vencem as
+            automáticas e a IA, e valem para os e-mails da lista de E-mails.
+          </p>
+        </div>
+
+        {ruleMsg && (
+          <p role={params.regra === "invalida" || params.regra === "cheia" ? "alert" : "status"} className={`chip ${ruleMsg[0]} m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm`}>
+            {ruleMsg[1]}
+          </p>
+        )}
+
+        {rules.length === 0 && <p className="text-sm text-mute">Nenhuma regra ainda.</p>}
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {rules.map((r) => (
+            <li key={r.match} className="flex min-h-11 items-center gap-3 border-t border-line first:border-0">
+              <span className="min-w-0 flex-1 truncate font-medium">{r.match}</span>
+              <span className={`chip ${CATEGORY_CHIP[r.category]}`}>{CATEGORY_LABEL[r.category]}</span>
+              <form action={removeRule}>
+                <input type="hidden" name="match" value={r.match} />
+                <button type="submit" className="btn px-3 py-1.5 text-[13px]" aria-label={`Remover a regra de ${r.match}`}>Remover</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+
+        <form action={addRule} className="flex flex-wrap items-end gap-3">
+          <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-sm text-mute">
+            Domínio ou e-mail
+            <input
+              name="match"
+              required
+              maxLength={100}
+              placeholder="empresa.com ou pessoa@gmail.com"
+              className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Categoria
+            <select name="category" defaultValue="trabalho" className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary min-h-11">Adicionar regra</button>
+        </form>
+      </section>
     </main>
   );
 }

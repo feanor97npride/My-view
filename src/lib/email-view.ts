@@ -17,7 +17,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   agendamento: "Agendamento",
   trabalho: "Trabalho",
   pessoal: "Pessoal",
-  aguardando: "Aguardando",
+  aguardando: "Aguardando resposta",
   informativo: "Informativo",
 };
 
@@ -67,6 +67,40 @@ export function filterEmails<T extends { category: string; unread: boolean; send
       (!f.naolidos || e.unread) &&
       (!q || norm(`${e.sender} ${e.subject}`).includes(q)),
   );
+}
+
+export const AGUARDANDO_DIAS = 2;
+
+export type ThreadLike = {
+  id: string;
+  messages?: { internalDate: string; labelIds?: string[]; payload: { headers: { name: string; value: string }[] } }[];
+};
+export type Awaiting = { threadId: string; to: string; subject: string; sentAt: Date; dias: number };
+
+// Conversations whose last message is mine, sent AGUARDANDO_DIAS or more ago, and not only to myself.
+export function pickAwaiting(threads: ThreadLike[], myEmail: string, now: Date): Awaiting[] {
+  const me = myEmail.trim().toLowerCase();
+  const out: Awaiting[] = [];
+  for (const t of threads) {
+    const msgs = [...(t.messages ?? [])].sort((a, b) => Number(a.internalDate) - Number(b.internalDate));
+    const last = msgs[msgs.length - 1];
+    if (!last?.labelIds?.includes("SENT") || last.labelIds.includes("DRAFT")) continue;
+    const sentAt = new Date(Number(last.internalDate));
+    const dias = Math.floor((now.getTime() - sentAt.getTime()) / 86_400_000);
+    if (dias < AGUARDANDO_DIAS) continue;
+    const header = (n: string) => last.payload.headers.find((h) => h.name.toLowerCase() === n)?.value ?? "";
+    // shortcut: recipients are split on commas, so a quoted name containing a comma is read as two people
+    const people = header("to").split(",").map(parseSender).filter((p) => p.name);
+    if (people.length > 0 && people.every((p) => p.address.toLowerCase() === me)) continue;
+    out.push({
+      threadId: t.id,
+      to: people.map((p) => p.name).join(", ") || "(sem destinatário visível)",
+      subject: header("subject") || "(sem assunto)",
+      sentAt,
+      dias,
+    });
+  }
+  return out.sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
 }
 
 // Today -> "14:05"; any other day -> "14 nov".

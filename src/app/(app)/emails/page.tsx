@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { primaryTz } from "@/lib/calendar";
-import { CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails, parseSender, shortDate } from "@/lib/email-view";
-import { syncEmails } from "@/lib/gmail";
+import { AGUARDANDO_DIAS, CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails, parseSender, shortDate } from "@/lib/email-view";
+import { awaitingReply, syncEmails } from "@/lib/gmail";
 
 type Params = { categoria?: string; naolidos?: string; q?: string };
 
@@ -13,17 +13,24 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
     return <main className="p-6">Gmail indisponível. Entre de novo para reconectar a sua conta.</main>;
   }
 
-  // shortcut: a Gmail failure shows a note instead of an error page
-  const [mail, tz] = await Promise.all([syncEmails(token).catch((e: Error) => e), primaryTz(token).catch(() => "UTC")]);
   const account = session.user?.email ?? "";
-  const now = new Date();
-
   const categoria = params.categoria && params.categoria in CATEGORY_LABEL ? params.categoria : undefined;
+  const aguardando = categoria === "aguardando"; // sent mail still unanswered, a separate Gmail query
   const naolidos = params.naolidos === "1";
   const q = params.q?.slice(0, 100);
 
+  // shortcut: a Gmail failure shows a note instead of an error page
+  const [mail, tz, waiting] = await Promise.all([
+    syncEmails(token).catch((e: Error) => e),
+    primaryTz(token).catch(() => "UTC"),
+    aguardando ? awaitingReply(token, account).catch((e: Error) => e) : null,
+  ]);
+  const now = new Date();
+
   const all = mail instanceof Error ? [] : mail.emails;
-  const shown = filterEmails(all, { categoria, naolidos, q });
+  const shown = filterEmails(all, { categoria: aguardando ? undefined : categoria, naolidos, q });
+  const gmailLink = (threadId: string) =>
+    `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${encodeURIComponent(threadId)}`;
   const counts = Object.fromEntries(Object.entries(Object.groupBy(all, (e) => e.category)).map(([c, l]) => [c, l?.length ?? 0]));
 
   const href = (cat?: string) => {
@@ -55,11 +62,42 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
             </Link>
             {Object.entries(CATEGORY_LABEL).map(([key, label]) => (
               <Link key={key} href={href(key)} className={pill(categoria === key)} aria-current={categoria === key ? "true" : undefined}>
-                {label} ({counts[key] ?? 0})
+                {label}
+                {key !== "aguardando" && ` (${counts[key] ?? 0})`}
               </Link>
             ))}
           </nav>
 
+          {aguardando ? (
+            <>
+              <p className="text-sm text-mute">
+                Conversas em que a sua mensagem é a última e não houve resposta há {AGUARDANDO_DIAS} dias ou mais (últimos 14 dias).
+              </p>
+              {waiting instanceof Error && <p className="text-sm text-mute">Não foi possível ler os enviados: {waiting.message}</p>}
+              {Array.isArray(waiting) && waiting.length === 0 && <p className="card text-mute">Nada aguardando resposta.</p>}
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                {Array.isArray(waiting) &&
+                  waiting.map((w) => (
+                    <li key={w.threadId}>
+                      <a
+                        href={gmailLink(w.threadId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="card flex min-w-0 flex-col gap-0.5 px-4 py-3 text-ink no-underline hover:border-primary"
+                      >
+                        <span className="flex items-baseline justify-between gap-3">
+                          <span className="truncate">Para {w.to}</span>
+                          <span className="chip chip-amber shrink-0">há {w.dias} {w.dias === 1 ? "dia" : "dias"}</span>
+                        </span>
+                        <span className="truncate font-semibold">{w.subject}</span>
+                        <span className="sr-only">Abre no Gmail, em nova aba</span>
+                      </a>
+                    </li>
+                  ))}
+              </ul>
+            </>
+          ) : (
+            <>
           <form method="get" action="/emails" role="search" className="flex flex-wrap items-center gap-3">
             {categoria && <input type="hidden" name="categoria" value={categoria} />}
             <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-sm text-mute">
@@ -91,7 +129,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
               return (
                 <li key={m.id}>
                   <a
-                    href={`https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${encodeURIComponent(m.threadId)}`}
+                    href={gmailLink(m.threadId)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="card flex gap-3 px-4 py-3 text-ink no-underline hover:border-primary"
@@ -119,6 +157,8 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
               );
             })}
           </ul>
+            </>
+          )}
         </>
       )}
     </main>
