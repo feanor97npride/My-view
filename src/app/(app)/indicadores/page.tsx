@@ -4,6 +4,8 @@ import { canonicalStatus, completedDates, countByDay, openTasks } from "@/lib/cl
 import { emailCounts } from "@/lib/gmail";
 import { CategoryBars, DoneTrend, StatusPie } from "./charts";
 
+export const metadata = { title: "Indicadores" };
+
 const note = (what: string, e: Error) => <p className="text-sm text-mute">{what} indisponível: {e.message}</p>;
 
 export default async function Indicadores() {

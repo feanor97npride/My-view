@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import Reconnect from "@/components/reconnect";
 import { listCalendars, pickCalendars } from "@/lib/calendar";
 import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL } from "@/lib/email-view";
@@ -42,6 +43,8 @@ async function removeRule(formData: FormData) {
   redirect("/configuracoes?regra=removida");
 }
 
+export const metadata = { title: "Configurações" };
+
 const RULE_MESSAGE: Record<string, [string, string]> = {
   ok: ["chip-green", "Regra salva. Vale para os e-mails da lista na próxima abertura."],
   removida: ["chip-green", "Regra removida."],
@@ -56,7 +59,11 @@ export default async function Configuracoes({
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
-    return <main className="p-6">Entre de novo para reconectar o Google Calendar.</main>;
+    return (
+      <main className="p-6">
+        <Reconnect what="Configurações" />
+      </main>
+    );
   }
 
   const [all, selected, rules] = await Promise.all([

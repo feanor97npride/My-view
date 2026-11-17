@@ -15,6 +15,7 @@ export type Task = {
   due: Date | null;
   subtasks: number;
   bucket: "overdue" | "today" | "week" | "later" | "nodate";
+  url: string; // opens the task in ClickUp
 };
 
 type RawTask = {
@@ -99,6 +100,7 @@ export async function openTasks(now = new Date()): Promise<Task[]> {
         due,
         subtasks: t.subtasks?.length ?? 0,
         bucket: bucketOf(due, now),
+        url: `https://app.clickup.com/t/${t.id}`,
       };
     })
     .sort((a, b) => (a.due?.getTime() ?? Infinity) - (b.due?.getTime() ?? Infinity));

@@ -69,6 +69,11 @@ export function filterEmails<T extends { category: string; unread: boolean; send
   );
 }
 
+// Opens a conversation in Gmail on the right Google account (authuser avoids landing on another logged-in account).
+export function gmailThreadUrl(account: string, threadId: string): string {
+  return `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${encodeURIComponent(threadId)}`;
+}
+
 export const AGUARDANDO_DIAS = 2;
 
 export type ThreadLike = {

@@ -24,7 +24,7 @@ function SignOut() {
         await signOut({ redirectTo: "/login" });
       }}
     >
-      <button type="submit" className="btn px-3 py-1.5 text-[13px]">Sair</button>
+      <button type="submit" className="btn min-h-10 px-3 text-[13px]">Sair</button>
     </form>
   );
 }
@@ -35,6 +35,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-20 focus:rounded-xl focus:bg-card focus:px-4 focus:py-2 focus:font-semibold"
+      >
+        Pular para o conteúdo
+      </a>
       <aside className="hidden w-[248px] shrink-0 flex-col gap-7 border-r border-line bg-card p-5 md:flex">
         <Brand />
         <NavLinks variant="side" />
@@ -56,7 +62,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <div className="min-w-0 flex-1 pb-24 md:pb-0">{children}</div>
+      <div id="conteudo" tabIndex={-1} className="min-w-0 flex-1 pb-24 outline-none md:pb-0">
+        {children}
+      </div>
       <NavLinks variant="bottom" />
     </div>
   );

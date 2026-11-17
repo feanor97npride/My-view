@@ -8,12 +8,14 @@ export type CalEvent = {
   start: Date;
   end: Date;
   allDay: boolean;
+  link: string | null; // opens the event in Google Calendar
 };
 
 type GEvent = {
   id: string;
   summary?: string;
   status?: string;
+  htmlLink?: string;
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
 };
@@ -49,6 +51,7 @@ export function toEvent(e: GEvent, calendar: string): CalEvent {
     start: new Date(e.start.dateTime ?? e.start.date ?? 0),
     end: new Date(e.end.dateTime ?? e.end.date ?? 0),
     allDay,
+    link: e.htmlLink ?? null,
   };
 }
 

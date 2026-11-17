@@ -2,7 +2,10 @@ import { auth } from "@/auth";
 import { busyHours, timeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
 import { getSelectedCalendars } from "@/lib/prefs";
+import Reconnect from "@/components/reconnect";
 import WeekChart from "./week-chart";
+
+export const metadata = { title: "Semana" };
 
 const DAY = 86_400_000;
 
@@ -14,7 +17,11 @@ export default async function Semana() {
   const tasks = await openTasks().catch((e: Error) => e);
 
   if (!week) {
-    return <main className="p-6">Agenda indisponível. Entre de novo para reconectar o Google Calendar.</main>;
+    return (
+      <main className="p-6">
+        <Reconnect what="Agenda" />
+      </main>
+    );
   }
 
   const { tz, events } = week;
@@ -70,14 +77,24 @@ export default async function Semana() {
               <p key={e.id} className="text-[13px] leading-snug">
                 <span className="tabular-nums text-mute">{e.allDay ? "Dia inteiro" : `${time(e.start)} – ${time(e.end)}`}</span>
                 <br />
-                <span className="font-semibold">{e.title}</span>
+                {e.link ? (
+                  <a href={e.link} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
+                    {e.title}
+                    <span className="sr-only"> (abre no Google Agenda, em nova aba)</span>
+                  </a>
+                ) : (
+                  <span className="font-semibold">{e.title}</span>
+                )}
               </p>
             ))}
             {p.dayTasks.map((t) => (
               <p key={t.id} className="text-[13px] leading-snug">
                 <span className="chip chip-amber px-2 py-px text-[11px]">Prazo</span>
                 <br />
-                <span className="font-semibold">{t.title}</span>
+                <a href={t.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
+                  {t.title}
+                  <span className="sr-only"> (abre no ClickUp, em nova aba)</span>
+                </a>
                 <span className="text-mute"> · {t.list}</span>
               </p>
             ))}

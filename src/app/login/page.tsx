@@ -1,5 +1,7 @@
 import { signIn } from "@/auth";
 
+export const metadata = { title: "Entrar" };
+
 export default function Login() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">

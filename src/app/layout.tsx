@@ -6,7 +6,7 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const space = Space_Grotesk({ variable: "--font-space", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "My View",
+  title: { default: "My View", template: "%s · My View" },
   description: "Seu dia em um só lugar: agenda, tarefas e e-mails.",
 };
 

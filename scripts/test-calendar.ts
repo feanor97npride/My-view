@@ -33,4 +33,9 @@ assert.deepEqual(pickCalendars(cals, null), cals);
 assert.deepEqual(pickCalendars(cals, []), cals);
 assert.deepEqual(pickCalendars(cals, ["gone"]), cals); // saved id no longer exists -> show all, never blank
 
+// toEvent keeps the Google Calendar link, or null when the API gives none
+const linked = toEvent({ id: "c", start: { dateTime: "2026-11-16T10:00:00-03:00" }, end: { dateTime: "2026-11-16T11:00:00-03:00" }, htmlLink: "https://www.google.com/calendar/event?eid=abc" }, "X");
+assert.equal(linked.link, "https://www.google.com/calendar/event?eid=abc");
+assert.equal(timed.link, null);
+
 console.log("calendar: ok");

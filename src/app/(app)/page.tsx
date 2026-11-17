@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import LiveMeeting from "@/components/live-meeting";
+import Reconnect from "@/components/reconnect";
 import { busyHours, timeline } from "@/lib/calendar";
-import { openTasks } from "@/lib/clickup";
+import { openTasks, type Task } from "@/lib/clickup";
 import { staticAlerts, summarize } from "@/lib/day-summary";
+import { gmailThreadUrl } from "@/lib/email-view";
 import { syncEmails } from "@/lib/gmail";
 import { getSelectedCalendars } from "@/lib/prefs";
 
@@ -31,6 +33,23 @@ function Kpi({ label, value, hint, icon, tone }: { label: string; value: string 
   );
 }
 
+export const metadata = { title: "Hoje" };
+
+function TaskRow({ t }: { t: Task }) {
+  return (
+    <li className="flex flex-col gap-1.5 border-t border-line py-3">
+      <a href={t.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
+        {t.title}
+        <span className="sr-only"> (abre no ClickUp, em nova aba)</span>
+      </a>
+      <span className="flex flex-wrap items-center gap-2">
+        <span className={`chip ${t.bucket === "overdue" ? "chip-red" : "chip-amber"}`}>{t.bucket === "overdue" ? "Atrasada" : "Hoje"}</span>
+        <span className="text-[13px] text-mute">{t.list} · {t.status}</span>
+      </span>
+    </li>
+  );
+}
+
 export default async function Home() {
   const session = await auth();
   const selected = await getSelectedCalendars().catch(() => null);
@@ -50,7 +69,8 @@ export default async function Home() {
   const urgent = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today") : [];
   const overdue = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue").length : 0;
   const dueToday = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "today").length : 0;
-  const actions = mail && !(mail instanceof Error) ? mail.actions : [];
+  const account = session?.user?.email ?? "";
+  const actions = mail && !(mail instanceof Error) ? mail.emails.filter((e) => e.category === "acao" && e.unread) : [];
   const nextEvent = today?.events.find((e) => !e.allDay && e.start > now);
 
   // Summary and alerts: a source that failed is null, so it is left out instead of showing a false zero.
@@ -77,7 +97,11 @@ export default async function Home() {
 
   const state = (e: { allDay: boolean; start: Date; end: Date }) =>
     e.allDay ? "next" : e.end < now ? "done" : e.start <= now ? "now" : "next";
-  const cardClass = { done: "border-line bg-bg text-mute", now: "border-2 border-primary bg-primary-soft", next: "border-line-strong bg-card" };
+  const cardClass = {
+    done: "border-line bg-bg text-mute",
+    now: "border-2 border-primary bg-primary-soft text-ink",
+    next: "border-line-strong bg-card text-ink",
+  };
   const tag = { done: ["Concluído", "chip-slate"], now: ["Em andamento", "chip-primary"], next: ["A seguir", "chip-blue"] };
 
   return (
@@ -121,7 +145,7 @@ export default async function Home() {
             <h2 className="font-display text-xl font-semibold">Linha do tempo de hoje</h2>
             <Link href="/semana" className="text-sm font-semibold">Ver semana</Link>
           </div>
-          {!today && <p>Agenda indisponível. Entre de novo para reconectar o Google Calendar.</p>}
+          {!today && <Reconnect what="Agenda" />}
           {today && today.events.length === 0 && <p className="text-mute">Nenhum compromisso hoje.</p>}
           <ol className="flex list-none flex-col gap-3 p-0">
             {today?.events.map((e) => {
@@ -138,13 +162,19 @@ export default async function Home() {
                       </>
                     )}
                   </div>
-                  <div className={`min-w-0 flex-1 rounded-xl border px-3.5 py-3 ${cardClass[s]}`}>
-                    <div className="flex items-start justify-between gap-2">
+                  <a
+                    href={e.link ?? undefined}
+                    target={e.link ? "_blank" : undefined}
+                    rel={e.link ? "noopener noreferrer" : undefined}
+                    className={`block min-w-0 flex-1 rounded-xl border px-3.5 py-3 no-underline ${e.link ? "hover:border-primary" : ""} ${cardClass[s]}`}
+                  >
+                    <span className="flex items-start justify-between gap-2">
                       <span className="font-semibold">{e.title}</span>
                       <span className={`chip ${tag[s][1]}`}>{tag[s][0]}</span>
-                    </div>
-                    <div className="mt-0.5 text-[13px] text-mute">{e.calendar}</div>
-                  </div>
+                    </span>
+                    <span className="mt-0.5 block text-[13px] text-mute">{e.calendar}</span>
+                    {e.link && <span className="sr-only">Abre no Google Agenda, em nova aba</span>}
+                  </a>
                 </li>
               );
             })}
@@ -161,16 +191,21 @@ export default async function Home() {
             {Array.isArray(tasks) && urgent.length === 0 && <p className="text-mute">Nada atrasado nem para hoje.</p>}
             <ul className="m-0 list-none p-0">
               {urgent.slice(0, 4).map((t) => (
-                <li key={t.id} className="flex flex-col gap-1.5 border-t border-line py-3">
-                  <span className="font-semibold">{t.title}</span>
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className={`chip ${t.bucket === "overdue" ? "chip-red" : "chip-amber"}`}>{t.bucket === "overdue" ? "Atrasada" : "Hoje"}</span>
-                    <span className="text-[13px] text-mute">{t.list} · {t.status}</span>
-                  </span>
-                </li>
+                <TaskRow key={t.id} t={t} />
               ))}
             </ul>
-            {urgent.length > 4 && <p className="mt-2 text-sm text-mute">+ {urgent.length - 4} atrasadas ou para hoje</p>}
+            {urgent.length > 4 && (
+              <details>
+                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-primary-ink">
+                  Ver as outras {urgent.length - 4} atrasadas ou para hoje
+                </summary>
+                <ul className="m-0 list-none p-0">
+                  {urgent.slice(4).map((t) => (
+                    <TaskRow key={t.id} t={t} />
+                  ))}
+                </ul>
+              </details>
+            )}
           </section>
 
           <section className="card">
@@ -181,15 +216,29 @@ export default async function Home() {
             {mail instanceof Error && <p className="text-sm text-mute">Gmail indisponível: {mail.message}</p>}
             {mail && !(mail instanceof Error) && actions.length === 0 && <p className="text-mute">Nenhum e-mail de ação por ler.</p>}
             <div className="flex flex-col gap-2.5">
-              {actions.slice(0, 3).map((m, i) => (
-                <div key={i} className="flex flex-col gap-1.5 rounded-xl p-3" style={{ background: "var(--violet-bg)" }}>
-                  <span className="truncate text-[13px] text-mute">{String(m.sender)}</span>
-                  <span className="font-semibold">{String(m.subject)}</span>
-                  <span><span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span></span>
-                </div>
+              {actions.slice(0, 3).map((m) => (
+                <a
+                  key={m.id}
+                  href={gmailThreadUrl(account, m.threadId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col gap-1.5 rounded-xl p-3 text-ink no-underline hover:outline hover:outline-2 hover:outline-[var(--primary)]"
+                  style={{ background: "var(--violet-bg)" }}
+                >
+                  <span className="truncate text-[13px] text-mute">{m.sender}</span>
+                  <span className="font-semibold">{m.subject}</span>
+                  <span>
+                    <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
+                    <span className="sr-only"> Abre no Gmail, em nova aba</span>
+                  </span>
+                </a>
               ))}
             </div>
-            {actions.length > 3 && <p className="mt-3 text-sm text-mute">+ {actions.length - 3} e-mails de ação</p>}
+            {actions.length > 3 && (
+              <Link href="/emails?categoria=acao&naolidos=1" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold">
+                Ver os outros {actions.length - 3} e-mails de ação
+              </Link>
+            )}
           </section>
         </div>
       </div>

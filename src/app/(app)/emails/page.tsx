@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import Reconnect from "@/components/reconnect";
 import { primaryTz } from "@/lib/calendar";
-import { AGUARDANDO_DIAS, CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails, parseSender, shortDate } from "@/lib/email-view";
+import { AGUARDANDO_DIAS, CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails, gmailThreadUrl, parseSender, shortDate } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
+
+export const metadata = { title: "E-mails" };
 
 type Params = { categoria?: string; naolidos?: string; q?: string };
 
@@ -10,7 +13,11 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
   const [session, params] = await Promise.all([auth(), searchParams]);
   const token = session?.accessToken;
   if (!token) {
-    return <main className="p-6">Gmail indisponível. Entre de novo para reconectar a sua conta.</main>;
+    return (
+      <main className="p-6">
+        <Reconnect what="Gmail" />
+      </main>
+    );
   }
 
   const account = session.user?.email ?? "";
@@ -29,8 +36,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
 
   const all = mail instanceof Error ? [] : mail.emails;
   const shown = filterEmails(all, { categoria: aguardando ? undefined : categoria, naolidos, q });
-  const gmailLink = (threadId: string) =>
-    `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${encodeURIComponent(threadId)}`;
+  const gmailLink = (threadId: string) => gmailThreadUrl(account, threadId);
   const counts = Object.fromEntries(Object.entries(Object.groupBy(all, (e) => e.category)).map(([c, l]) => [c, l?.length ?? 0]));
 
   const href = (cat?: string) => {
@@ -116,8 +122,15 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
             <button type="submit" className="btn btn-primary mt-5 min-h-11">Filtrar</button>
           </form>
 
-          <p className="text-sm text-mute" aria-live="polite">
-            {shown.length} {shown.length === 1 ? "e-mail" : "e-mails"}
+          <p className="flex flex-wrap items-center gap-3 text-sm text-mute" aria-live="polite">
+            <span>
+              {shown.length} {shown.length === 1 ? "e-mail" : "e-mails"}
+            </span>
+            {(categoria || naolidos || q) && (
+              <Link href="/emails" className="inline-flex min-h-11 items-center font-semibold">
+                Limpar filtros
+              </Link>
+            )}
           </p>
           {all.length === 0 && <p className="card text-mute">Nenhum e-mail recente.</p>}
           {all.length > 0 && shown.length === 0 && <p className="card text-mute">Nenhum e-mail com esses filtros.</p>}

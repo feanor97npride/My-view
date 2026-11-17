@@ -123,10 +123,7 @@ export async function syncEmails(token: string) {
         classified_by = EXCLUDED.classified_by, updated_at = now()`;
   }
 
-  const actions = await sql`
-    SELECT sender, subject, received_at FROM emails
-    WHERE category = 'acao' AND unread ORDER BY received_at DESC LIMIT 10`;
-  return { actions, counts: await emailCounts(), emails: emails.sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime()) };
+  return { counts: await emailCounts(), emails: emails.sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime()) };
 }
 
 // E-mails per category over the last 7 days, read from the database (no Gmail call).
