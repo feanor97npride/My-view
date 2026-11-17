@@ -1,0 +1,153 @@
+import Link from "next/link";
+import { auth } from "@/auth";
+import { timeline } from "@/lib/calendar";
+import { openTasks } from "@/lib/clickup";
+import { syncEmails } from "@/lib/gmail";
+
+const KPI_ICONS = {
+  agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+  late: "M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
+  today: "M5 3v18M5 4h12l-2 4 2 4H5",
+  mail: "M3 6h18v12H3zM3 7l9 6 9-6",
+};
+
+function Kpi({ label, value, hint, icon, tone }: { label: string; value: string | number; hint: string; icon: string; tone: string }) {
+  return (
+    <div className="card flex items-center gap-3.5 px-5 py-[18px]">
+      <span className={`chip ${tone} flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[14px] p-0`} aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d={icon} />
+        </svg>
+      </span>
+      <div>
+        <div className="text-[13px] text-mute">{label}</div>
+        <div className="font-display text-3xl font-bold leading-tight">{value}</div>
+        <div className="text-xs text-mute">{hint}</div>
+      </div>
+    </div>
+  );
+}
+
+export default async function Home() {
+  const session = await auth();
+  const today = session?.accessToken ? await timeline(session.accessToken) : null;
+  // shortcut: a ClickUp or Gmail failure shows a note instead of breaking the rest of the page
+  const tasks = await openTasks().catch((e: Error) => e);
+  const mail = session?.accessToken ? await syncEmails(session.accessToken).catch((e: Error) => e) : null;
+
+  const now = new Date();
+  const tz = today?.tz ?? "UTC";
+  const hour = Number(now.toLocaleString("pt-BR", { hour: "numeric", hourCycle: "h23", timeZone: tz }));
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const first = session?.user?.name?.split(" ")[0] ?? "";
+  const dateLabel = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: tz });
+  const fmt = (d: Date) => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: tz });
+
+  const urgent = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today") : [];
+  const overdue = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue").length : 0;
+  const dueToday = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "today").length : 0;
+  const actions = mail && !(mail instanceof Error) ? mail.actions : [];
+  const nextEvent = today?.events.find((e) => !e.allDay && e.start > now);
+
+  const state = (e: { allDay: boolean; start: Date; end: Date }) =>
+    e.allDay ? "next" : e.end < now ? "done" : e.start <= now ? "now" : "next";
+  const cardClass = { done: "border-line bg-bg text-mute", now: "border-2 border-primary bg-primary-soft", next: "border-line-strong bg-card" };
+  const tag = { done: ["Concluído", "chip-slate"], now: ["Em andamento", "chip-primary"], next: ["A seguir", "chip-blue"] };
+
+  return (
+    <main className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:p-10">
+      <header>
+        <p className="text-sm capitalize text-mute">{dateLabel}</p>
+        <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+          {greeting}{first && `, ${first}`}
+        </h1>
+      </header>
+
+      <section aria-label="Resumo" className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
+        <Kpi label="Compromissos hoje" value={today ? today.events.length : "–"} hint={nextEvent ? `Próximo às ${fmt(nextEvent.start)}` : "Nada mais hoje"} icon={KPI_ICONS.agenda} tone="chip-blue" />
+        <Kpi label="Tarefas atrasadas" value={Array.isArray(tasks) ? overdue : "–"} hint={Array.isArray(tasks) ? `de ${tasks.length} abertas` : "ClickUp indisponível"} icon={KPI_ICONS.late} tone="chip-red" />
+        <Kpi label="Vencem hoje" value={Array.isArray(tasks) ? dueToday : "–"} hint="ainda no prazo" icon={KPI_ICONS.today} tone="chip-amber" />
+        <Kpi label="E-mails de ação" value={mail && !(mail instanceof Error) ? actions.length : "–"} hint="não lidos" icon={KPI_ICONS.mail} tone="chip-violet" />
+      </section>
+
+      <div className="flex flex-wrap items-start gap-6">
+        <section className="card min-w-0 flex-[1.4_1_420px]">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="font-display text-xl font-semibold">Linha do tempo de hoje</h2>
+            <Link href="/semana" className="text-sm font-semibold">Ver semana</Link>
+          </div>
+          {!today && <p>Agenda indisponível. Entre de novo para reconectar o Google Calendar.</p>}
+          {today && today.events.length === 0 && <p className="text-mute">Nenhum compromisso hoje.</p>}
+          <ol className="flex list-none flex-col gap-3 p-0">
+            {today?.events.map((e) => {
+              const s = state(e);
+              return (
+                <li key={e.id} className="flex items-stretch gap-4">
+                  <div className="w-[52px] shrink-0 pt-3 text-right text-[13px] tabular-nums text-mute">
+                    {e.allDay ? (
+                      <div className="font-semibold text-ink">Dia</div>
+                    ) : (
+                      <>
+                        <div className="font-semibold text-ink">{fmt(e.start)}</div>
+                        <div>{fmt(e.end)}</div>
+                      </>
+                    )}
+                  </div>
+                  <div className={`min-w-0 flex-1 rounded-xl border px-3.5 py-3 ${cardClass[s]}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-semibold">{e.title}</span>
+                      <span className={`chip ${tag[s][1]}`}>{tag[s][0]}</span>
+                    </div>
+                    <div className="mt-0.5 text-[13px] text-mute">{e.calendar}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-6">
+          <section className="card">
+            <div className="mb-1 flex items-baseline justify-between">
+              <h2 className="font-display text-xl font-semibold">Fazer agora</h2>
+              {overdue > 0 && <span className="text-[13px] font-semibold" style={{ color: "var(--red-fg)" }}>{overdue} atrasadas</span>}
+            </div>
+            {!Array.isArray(tasks) && <p className="text-sm text-mute">ClickUp indisponível: {tasks.message}</p>}
+            {Array.isArray(tasks) && urgent.length === 0 && <p className="text-mute">Nada atrasado nem para hoje.</p>}
+            <ul className="m-0 list-none p-0">
+              {urgent.slice(0, 4).map((t) => (
+                <li key={t.id} className="flex flex-col gap-1.5 border-t border-line py-3">
+                  <span className="font-semibold">{t.title}</span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className={`chip ${t.bucket === "overdue" ? "chip-red" : "chip-amber"}`}>{t.bucket === "overdue" ? "Atrasada" : "Hoje"}</span>
+                    <span className="text-[13px] text-mute">{t.list} · {t.status}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {urgent.length > 4 && <p className="mt-2 text-sm text-mute">+ {urgent.length - 4} atrasadas ou para hoje</p>}
+          </section>
+
+          <section className="card">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="font-display text-xl font-semibold">E-mails que pedem ação</h2>
+              {mail && !(mail instanceof Error) && <span className="text-[13px] text-mute">{actions.length} não lidos</span>}
+            </div>
+            {mail instanceof Error && <p className="text-sm text-mute">Gmail indisponível: {mail.message}</p>}
+            {mail && !(mail instanceof Error) && actions.length === 0 && <p className="text-mute">Nenhum e-mail de ação por ler.</p>}
+            <div className="flex flex-col gap-2.5">
+              {actions.slice(0, 3).map((m, i) => (
+                <div key={i} className="flex flex-col gap-1.5 rounded-xl p-3" style={{ background: "var(--violet-bg)" }}>
+                  <span className="truncate text-[13px] text-mute">{String(m.sender)}</span>
+                  <span className="font-semibold">{String(m.subject)}</span>
+                  <span><span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span></span>
+                </div>
+              ))}
+            </div>
+            {actions.length > 3 && <p className="mt-3 text-sm text-mute">+ {actions.length - 3} e-mails de ação</p>}
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+}
