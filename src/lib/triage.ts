@@ -16,6 +16,9 @@ export type TriItem = {
   receivedAt: string; // ISO
   unread: boolean;
   inInbox?: boolean; // false after archiving; omitted/true means still in inbox
+  triado?: boolean;
+  clickupTaskId?: string;
+  calendarEventId?: string;
   category: string;
   when: string; // already formatted ("14:05", "14 nov"), computed on the server so the time zone matches
   url: string; // opens the conversation in Gmail
@@ -33,7 +36,7 @@ export function senderInfo(raw: string): { nome: string; email: string; dominio:
 const RANK: Record<string, number> = { acao: 0, financeiro: 1, agendamento: 2, trabalho: 3, pessoal: 4 };
 
 const byAge = (a: TriItem, b: TriItem) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt); // oldest waits longest
-const isPending = (i: TriItem) => i.unread && i.inInbox !== false;
+const isPending = (i: TriItem) => i.unread && i.inInbox !== false && !i.triado;
 
 // Order of the card in focus. With a queue filter: that category still in inbox, unread first. Without: unread in inbox only,
 // important categories first, then Trabalho and Pessoal. Informativo never enters the default queue.

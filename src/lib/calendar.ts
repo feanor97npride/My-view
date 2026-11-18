@@ -135,3 +135,33 @@ export const upcomingTimed = unstable_cache(
   ["upcoming-timed"],
   { revalidate: 60 },
 );
+
+export async function createCalendarEvent(
+  token: string,
+  input: { title: string; description: string; startIso: string; endIso: string; calendarId?: string },
+): Promise<{ id: string; link: string | null }> {
+  const cal = encodeURIComponent(input.calendarId ?? "primary");
+  const res = await fetch(`${API}/calendars/${cal}/events`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      summary: input.title,
+      description: input.description,
+      start: { dateTime: input.startIso },
+      end: { dateTime: input.endIso },
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Google Calendar ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const j = (await res.json()) as { id: string; htmlLink?: string };
+  return { id: j.id, link: j.htmlLink ?? null };
+}
+
+export async function deleteCalendarEvent(token: string, eventId: string, calendarId = "primary"): Promise<void> {
+  const res = await fetch(`${API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`Google Calendar ${res.status}: ${(await res.text()).slice(0, 300)}`);
+}

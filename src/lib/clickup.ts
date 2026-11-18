@@ -2,11 +2,16 @@ import { unstable_cache } from "next/cache";
 
 // Read-only ClickUp tasks from the lists the owner picked (ids from the workspace hierarchy).
 const API = "https://api.clickup.com/api/v2";
-const LISTS = [
-  "1000480000007959", // Sustentação CFTV · Sprint 01 · 12/11 a 27/11
-  "901321112382", // Projeto G.A. Plus Ultra
-  "1000480000007117", // Academy · Projeto Portal
-];
+export const CLICKUP_LISTS = [
+  { id: "1000480000007959", name: "Sustentação CFTV · Sprint 01" },
+  { id: "901321112382", name: "Projeto G.A. Plus Ultra" },
+  { id: "1000480000007117", name: "Academy · Projeto Portal" },
+] as const;
+const LISTS = CLICKUP_LISTS.map((l) => l.id);
+
+export function normalizeClickupList(id: unknown): string {
+  return typeof id === "string" && CLICKUP_LISTS.some((l) => l.id === id) ? id : CLICKUP_LISTS[0].id;
+}
 
 export type Task = {
   id: string;
@@ -121,4 +126,29 @@ export async function completedDates(days = 14, now = new Date()): Promise<Date[
   return (await fetchLists(`include_closed=true&date_done_gt=${since}`))
     .filter((t) => isClosed(t) && t.date_done)
     .map((t) => new Date(Number(t.date_done)));
+}
+
+export async function createClickupTask(listId: string, input: { name: string; description: string }): Promise<{ id: string; url: string }> {
+  const token = process.env.CLICKUP_API_TOKEN;
+  if (!token) throw new Error("CLICKUP_API_TOKEN não configurado");
+  const res = await fetch(`${API}/list/${encodeURIComponent(normalizeClickupList(listId))}/task`, {
+    method: "POST",
+    headers: { Authorization: token, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: input.name, description: input.description }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = (await res.json()) as { id: string; url?: string };
+  return { id: j.id, url: j.url ?? `https://app.clickup.com/t/${j.id}` };
+}
+
+export async function deleteClickupTask(taskId: string): Promise<void> {
+  const token = process.env.CLICKUP_API_TOKEN;
+  if (!token) throw new Error("CLICKUP_API_TOKEN não configurado");
+  const res = await fetch(`${API}/task/${encodeURIComponent(taskId)}`, {
+    method: "DELETE",
+    headers: { Authorization: token },
+    cache: "no-store",
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }

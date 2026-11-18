@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import Reconnect from "@/components/reconnect";
 import { listCalendars, pickCalendars } from "@/lib/calendar";
+import { CLICKUP_LISTS, normalizeClickupList } from "@/lib/clickup";
 import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getAwaitingDays, getEmailRules, getMeetingWindow, getSelectedCalendars, setAwaitingDays, setEmailRules, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getDefaultClickupList, getEmailRules, getMeetingWindow, getSelectedCalendars, setAwaitingDays, setDefaultClickupList, setEmailRules, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -37,6 +38,15 @@ async function saveAwaitingDays(formData: FormData) {
   await setAwaitingDays(normalizeAwaitingDays(formData.get("prazo")));
   revalidatePath("/", "layout");
   redirect("/configuracoes?prazo=ok");
+}
+
+async function saveClickupList(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  await setDefaultClickupList(normalizeClickupList(formData.get("lista")));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?lista=ok");
 }
 
 async function addRule(formData: FormData) {
@@ -74,7 +84,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -85,12 +95,13 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, windowMin, awaitingDays] = await Promise.all([
+  const [all, selected, rules, windowMin, awaitingDays, clickupList] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
     getMeetingWindow().catch(() => 30),
     getAwaitingDays().catch(() => 2),
+    getDefaultClickupList().catch(() => CLICKUP_LISTS[0].id),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
@@ -164,6 +175,25 @@ export default async function Configuracoes({
         <button type="submit" className="btn btn-primary min-h-11">Salvar prazo</button>
         {params.prazo && (
           <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Prazo salvo.</p>
+        )}
+      </form>
+
+      <form action={saveClickupList} className="card flex flex-wrap items-end gap-3">
+        <div className="w-full">
+          <h2 className="font-display text-xl font-semibold">ClickUp</h2>
+          <p className="text-sm text-mute">Lista padrão ao transformar um e-mail em tarefa na tela de E-mails.</p>
+        </div>
+        <label className="flex flex-col gap-1 text-sm text-mute">
+          Lista padrão
+          <select name="lista" defaultValue={clickupList} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+            {CLICKUP_LISTS.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="btn btn-primary min-h-11">Salvar lista</button>
+        {params.lista && (
+          <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Lista padrão salva.</p>
         )}
       </form>
 

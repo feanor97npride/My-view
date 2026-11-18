@@ -59,4 +59,8 @@ assert.deepEqual(buildQueue([arquivado], "acao"), []);
 assert.equal(resumir([arquivado]).importantes, 0);
 assert.equal(resumir([arquivado]).importantesTriados, 1);
 
+const triado: TriItem = { ...mk("agendamento", true, "2026-11-18T11:00:00Z"), triado: true, calendarEventId: "ev1" };
+assert.deepEqual(buildQueue([triado], null), []);
+assert.equal(resumir([triado]).importantes, 0);
+
 console.log("triage: ok");

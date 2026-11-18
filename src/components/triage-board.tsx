@@ -68,6 +68,7 @@ export default function TriageBoard({
   const [leaving, setLeaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ label: string; undo: () => void } | null>(null);
+  const [sched, setSched] = useState<{ id: string; title: string; start: string; minutes: number } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -87,7 +88,7 @@ export default function TriageBoard({
   const count = (f: Fila) => (f === "aguardando" ? (waiting ? waiting.length : null) : (resumo.porCategoria[f] ?? 0));
   const title = tituloResumo(resumo);
   const done = resumo.importantesTotal ? resumo.importantesTriados / resumo.importantesTotal : 1;
-  const unreadIn = (c: string) => visible.filter((i) => i.category === c && i.unread && i.inInbox !== false);
+  const unreadIn = (c: string) => visible.filter((i) => i.category === c && i.unread && i.inInbox !== false && !i.triado);
 
   const showToast = (msg: string, undo: () => void) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -96,51 +97,146 @@ export default function TriageBoard({
   };
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
-  const postAction = async (body: unknown): Promise<string | null> => {
+  const postAction = async <T extends Record<string, unknown> = Record<string, unknown>>(
+    body: unknown,
+  ): Promise<{ ok: true; data: T } | { ok: false; error: string }> => {
     try {
       const res = await fetch("/api/emails/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (res.ok) return null;
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      return j.error ?? `Erro ${res.status}`;
+      const j = (await res.json().catch(() => ({}))) as T & { error?: string };
+      if (res.ok) return { ok: true, data: j };
+      return { ok: false, error: j.error ?? `Erro ${res.status}` };
     } catch {
-      return "Falha de conexão ao atualizar o Gmail.";
+      return { ok: false, error: "Falha de conexão ao executar a ação." };
+    }
+  };
+
+  const advanceWithMotion = (commit: () => void) => {
+    const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) commit();
+    else {
+      setLeaving(true);
+      setTimeout(commit, 150);
     }
   };
 
   const archiveFocus = (item: TriItem) => {
     setActionError(null);
+    setSched(null);
     const nextItem = queue.find((i) => i.id !== item.id) ?? null;
-    const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const commit = () => {
+    advanceWithMotion(() => {
       setLeaving(false);
       setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, inInbox: false } : x)));
       setFocusId(nextItem?.id ?? null);
       const undo = () => {
         setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, inInbox: true } : x)));
         setFocusId(item.id);
-        void postAction({ action: "unarchive", id: item.id }).then((err) => {
-          if (err) setActionError(err);
+        void postAction({ action: "unarchive", id: item.id }).then((r) => {
+          if (!r.ok) setActionError(r.error);
         });
       };
       showToast("Arquivado", undo);
-      void postAction({ action: "archive", id: item.id }).then((err) => {
-        if (err) {
+      void postAction({ action: "archive", id: item.id }).then((r) => {
+        if (!r.ok) {
           setToast(null);
           setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, inInbox: true } : x)));
           setFocusId(item.id);
-          setActionError(err);
+          setActionError(r.error);
         }
       });
-    };
-    if (reduced) commit();
-    else {
-      setLeaving(true);
-      setTimeout(commit, 150);
+    });
+  };
+
+  const taskFocus = (item: TriItem) => {
+    if (item.clickupTaskId) return;
+    setActionError(null);
+    setSched(null);
+    const nextItem = queue.find((i) => i.id !== item.id) ?? null;
+    advanceWithMotion(() => {
+      setLeaving(false);
+      setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: true, clickupTaskId: "pending" } : x)));
+      setFocusId(nextItem?.id ?? null);
+      const description = `${decodeEntities(item.snippet)}\n\nDe: ${item.sender}\nConversa: ${item.url}`.trim();
+      void postAction<{ taskId?: string }>({ action: "task", title: item.subject, description }).then((r) => {
+        if (!r.ok) {
+          setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: false, clickupTaskId: undefined } : x)));
+          setFocusId(item.id);
+          setActionError(r.error);
+          return;
+        }
+        const taskId = r.data.taskId;
+        setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, clickupTaskId: taskId } : x)));
+        showToast("Tarefa criada no ClickUp", () => {
+          setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: false, clickupTaskId: undefined } : x)));
+          setFocusId(item.id);
+          if (taskId) {
+            void postAction({ action: "untask", taskId }).then((u) => {
+              if (!u.ok) setActionError(u.error);
+            });
+          }
+        });
+      });
+    });
+  };
+
+  const openSchedule = (item: TriItem) => {
+    setActionError(null);
+    const d = new Date();
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+    setSched({ id: item.id, title: item.subject, start: local, minutes: 30 });
+  };
+
+  const confirmSchedule = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sched) return;
+    const item = items.find((x) => x.id === sched.id);
+    if (!item) return;
+    const startDate = new Date(sched.start);
+    if (Number.isNaN(startDate.getTime())) {
+      setActionError("Informe uma data e hora válidas.");
+      return;
     }
+    const endDate = new Date(startDate.getTime() + sched.minutes * 60_000);
+    const payload = {
+      action: "schedule",
+      title: sched.title.trim() || item.subject,
+      description: `${decodeEntities(item.snippet)}\n\nDe: ${item.sender}\nConversa: ${item.url}`.trim(),
+      startIso: startDate.toISOString(),
+      endIso: endDate.toISOString(),
+    };
+    setSched(null);
+    setActionError(null);
+    const nextItem = queue.find((i) => i.id !== item.id) ?? null;
+    advanceWithMotion(() => {
+      setLeaving(false);
+      setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: true, calendarEventId: "pending" } : x)));
+      setFocusId(nextItem?.id ?? null);
+      void postAction<{ eventId?: string }>(payload).then((r) => {
+        if (!r.ok) {
+          setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: false, calendarEventId: undefined } : x)));
+          setFocusId(item.id);
+          setActionError(r.error);
+          return;
+        }
+        const eventId = r.data.eventId;
+        setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, calendarEventId: eventId } : x)));
+        showToast("Adicionado à agenda", () => {
+          setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: false, calendarEventId: undefined } : x)));
+          setFocusId(item.id);
+          if (eventId) {
+            void postAction({ action: "unschedule", eventId }).then((u) => {
+              if (!u.ok) setActionError(u.error);
+            });
+          }
+        });
+      });
+    });
   };
 
   const markInformativosRead = () => {
@@ -151,22 +247,23 @@ export default function TriageBoard({
     setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, unread: false } : x)));
     const undo = () => {
       setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, unread: true } : x)));
-      void postAction({ action: "markUnread", ids }).then((err) => {
-        if (err) setActionError(err);
+      void postAction({ action: "markUnread", ids }).then((r) => {
+        if (!r.ok) setActionError(r.error);
       });
     };
     showToast(`${plural(ids.length, "informativo marcado", "informativos marcados")} como lidos`, undo);
-    void postAction({ action: "markRead", ids }).then((err) => {
-      if (err) {
+    void postAction({ action: "markRead", ids }).then((r) => {
+      if (!r.ok) {
         setToast(null);
         setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, unread: true } : x)));
-        setActionError(err);
+        setActionError(r.error);
       }
     });
   };
 
   const go = (delta: number) => {
     if (queue.length === 0) return;
+    setSched(null);
     setFocusId(queue[(Math.max(idx, 0) + delta + queue.length) % queue.length].id);
   };
 
@@ -174,6 +271,10 @@ export default function TriageBoard({
   const onKeyDown = (e: React.KeyboardEvent) => {
     const t = e.target as HTMLElement;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Escape" && sched) {
+      setSched(null);
+      return;
+    }
     if (t.matches("input, textarea, select, [contenteditable]")) {
       if (e.key === "Escape") (t as HTMLElement).blur();
       return;
@@ -182,6 +283,10 @@ export default function TriageBoard({
     if (k === "j" || k === "arrowright") go(1);
     else if (k === "k" || k === "arrowleft") go(-1);
     else if (k === "a" && focus) archiveFocus(focus);
+    else if (k === "g" && focus) {
+      e.preventDefault();
+      openSchedule(focus);
+    } else if (k === "t" && focus) taskFocus(focus);
     else if (k === "u" && toast) {
       const undo = toast.undo;
       setToast(null);
@@ -325,23 +430,78 @@ export default function TriageBoard({
                     <span>Arquivar</span>
                     <span className="text-[11px] font-medium opacity-70">A</span>
                   </button>
-                  {[
-                    ["Pôr na agenda", "G", { background: "var(--k-agendamento)", color: "var(--kt-agendamento)", borderColor: "transparent" }],
-                    ["Virar tarefa", "T", { background: "var(--k-trabalho)", color: "var(--kt-trabalho)", borderColor: "transparent" }],
-                    ["Responder", "R", { background: "var(--k-acao)", color: "var(--kt-acao)", borderColor: "transparent" }],
-                  ].map(([name, key, style]) => (
-                    <ExtLink
-                      key={name as string}
-                      href={focus.url}
-                      style={style as React.CSSProperties}
-                      className="flex min-h-[84px] flex-col items-center justify-center gap-1 rounded-[18px] border border-line-strong text-center font-semibold text-ink no-underline hover:brightness-110"
-                    >
-                      <span>{name as string}</span>
-                      <span className="text-[11px] font-medium opacity-70">{key as string}</span>
-                    </ExtLink>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => openSchedule(focus)}
+                    style={{ background: "var(--k-agendamento)", color: "var(--kt-agendamento)" }}
+                    className="flex min-h-[84px] cursor-pointer flex-col items-center justify-center gap-1 rounded-[18px] border-0 text-center font-semibold hover:brightness-110"
+                  >
+                    <span>{focus.calendarEventId ? "Já agendado" : "Pôr na agenda"}</span>
+                    <span className="text-[11px] font-medium opacity-70">G</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!focus.clickupTaskId}
+                    onClick={() => taskFocus(focus)}
+                    style={{ background: "var(--k-trabalho)", color: "var(--kt-trabalho)" }}
+                    className="flex min-h-[84px] cursor-pointer flex-col items-center justify-center gap-1 rounded-[18px] border-0 text-center font-semibold hover:brightness-110 disabled:opacity-60"
+                  >
+                    <span>{focus.clickupTaskId ? "Já virou tarefa" : "Virar tarefa"}</span>
+                    <span className="text-[11px] font-medium opacity-70">T</span>
+                  </button>
+                  <ExtLink
+                    href={focus.url}
+                    style={{ background: "var(--k-acao)", color: "var(--kt-acao)" }}
+                    className="flex min-h-[84px] flex-col items-center justify-center gap-1 rounded-[18px] text-center font-semibold no-underline hover:brightness-110"
+                  >
+                    <span>Responder</span>
+                    <span className="text-[11px] font-medium opacity-70">R</span>
+                  </ExtLink>
                 </div>
-                <p className="m-0 text-xs text-mute">Arquivar já atua direto no Gmail. Agenda, ClickUp e resposta rápida chegam na próxima etapa.</p>
+                {sched?.id === focus.id && (
+                  <form onSubmit={confirmSchedule} className="flex flex-col gap-3 rounded-2xl border border-line-strong p-4" style={{ background: "var(--surface-3)" }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">Novo evento no Google Agenda</span>
+                      <button type="button" onClick={() => setSched(null)} className="btn min-h-8 px-2.5 py-1 text-xs">Cancelar</button>
+                    </div>
+                    <label className="flex flex-col gap-1 text-xs text-mute">
+                      Título
+                      <input
+                        type="text"
+                        required
+                        value={sched.title}
+                        onChange={(e) => setSched({ ...sched, title: e.target.value })}
+                        className="min-h-10 rounded-xl border border-line-strong bg-card px-3 text-sm text-ink"
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-xs text-mute">
+                        Início
+                        <input
+                          type="datetime-local"
+                          required
+                          value={sched.start}
+                          onChange={(e) => setSched({ ...sched, start: e.target.value })}
+                          className="min-h-10 rounded-xl border border-line-strong bg-card px-3 text-sm text-ink"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-mute">
+                        Duração
+                        <select
+                          value={sched.minutes}
+                          onChange={(e) => setSched({ ...sched, minutes: Number(e.target.value) })}
+                          className="min-h-10 rounded-xl border border-line-strong bg-card px-3 text-sm text-ink"
+                        >
+                          <option value={30}>30 min</option>
+                          <option value={60}>1 hora</option>
+                          <option value={90}>1h30</option>
+                        </select>
+                      </label>
+                      <button type="submit" className="btn btn-primary min-h-10">Criar evento</button>
+                    </div>
+                  </form>
+                )}
+                <p className="m-0 text-xs text-mute">Arquivar, Pôr na agenda e Virar tarefa já atuam direto (com Desfazer). Responder abre a conversa no Gmail.</p>
               </>
             ) : q.trim() ? (
               <div className="flex flex-col items-start gap-3">
@@ -521,6 +681,8 @@ export default function TriageBoard({
         {help && (
           <p className="m-0 flex flex-wrap items-center gap-x-4 gap-y-1">
             <span><Kbd>A</Kbd> arquivar</span>
+            <span><Kbd>G</Kbd> pôr na agenda</span>
+            <span><Kbd>T</Kbd> virar tarefa</span>
             <span><Kbd>U</Kbd> desfazer</span>
             <span><Kbd>J</Kbd> <Kbd>→</Kbd> próximo</span>
             <span><Kbd>K</Kbd> <Kbd>←</Kbd> anterior</span>

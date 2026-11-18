@@ -1,6 +1,7 @@
 // Single-user preferences kept in Neon (table `preferences`), so they follow the owner across devices.
 import { neon } from "@neondatabase/serverless";
 
+import { normalizeClickupList } from "./clickup";
 import { normalizeWindow } from "./day-summary";
 import { normalizeAwaitingDays } from "./email-view";
 import { normalizeRule, type EmailRule } from "./email-rules";
@@ -9,6 +10,7 @@ const CALENDARS = "calendars";
 const EMAIL_RULES = "email_rules";
 const AWAITING_DAYS = "awaiting_days";
 const MEETING_WINDOW = "meeting_window_min";
+const CLICKUP_LIST = "default_clickup_list";
 
 // null = nothing saved yet, meaning "show every calendar".
 export async function getSelectedCalendars(): Promise<string[] | null> {
@@ -64,5 +66,19 @@ export async function setAwaitingDays(days: number): Promise<void> {
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`
     INSERT INTO preferences (key, value) VALUES (${AWAITING_DAYS}, ${JSON.stringify(normalizeAwaitingDays(days))}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
+}
+
+// Default ClickUp list when turning an e-mail into a task.
+export async function getDefaultClickupList(): Promise<string> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  const rows = await sql`SELECT value FROM preferences WHERE key = ${CLICKUP_LIST}`;
+  return normalizeClickupList(rows[0]?.value);
+}
+
+export async function setDefaultClickupList(id: string): Promise<void> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  await sql`
+    INSERT INTO preferences (key, value) VALUES (${CLICKUP_LIST}, ${JSON.stringify(normalizeClickupList(id))}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
 }
