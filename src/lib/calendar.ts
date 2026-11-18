@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 // Read-only Google Calendar access for "today" (no SDK: plain REST keeps the dependency count down).
 const API = "https://www.googleapis.com/calendar/v3";
 
@@ -119,3 +121,17 @@ export async function timeline(token: string, now = new Date(), days = 1, select
   const events = lists.flat().sort((a, b) => a.start.getTime() - b.start.getTime());
   return { tz, events };
 }
+
+// Timed events of today still to end, as ISO strings, cached 60 s per token so the meeting banner
+// in the shared layout does not call Google on every page. The browser keeps the countdown moving.
+export const upcomingTimed = unstable_cache(
+  async (token: string, selected: string[] | null) => {
+    const t = await timeline(token, new Date(), 1, selected);
+    const now = Date.now();
+    return t.events
+      .filter((e) => !e.allDay && e.end.getTime() > now)
+      .map((e) => ({ id: e.id, title: e.title, start: e.start.toISOString(), end: e.end.toISOString() }));
+  },
+  ["upcoming-timed"],
+  { revalidate: 60 },
+);
