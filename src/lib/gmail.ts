@@ -53,6 +53,16 @@ async function gget<T>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
+async function gpost(path: string, token: string, body: unknown): Promise<void> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
 // shortcut: only the 50 most recent matching messages per load, upgrade with pagination when the inbox grows
 export async function syncEmails(token: string) {
   const [list, userRules] = await Promise.all([
@@ -155,4 +165,26 @@ export async function awaitingReply(token: string, myEmail: string, minDays: num
     ),
   );
   return pickAwaiting(threads, myEmail, now, minDays);
+}
+
+export async function archiveEmail(token: string, id: string): Promise<void> {
+  await gpost(`/messages/${encodeURIComponent(id)}/modify`, token, { removeLabelIds: ["INBOX"] });
+}
+
+export async function unarchiveEmail(token: string, id: string): Promise<void> {
+  await gpost(`/messages/${encodeURIComponent(id)}/modify`, token, { addLabelIds: ["INBOX"] });
+}
+
+export async function markEmailsRead(token: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await gpost("/messages/batchModify", token, { ids, removeLabelIds: ["UNREAD"] });
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  await sql`UPDATE emails SET unread = false, updated_at = now() WHERE id = ANY(${ids})`.catch(() => {});
+}
+
+export async function markEmailsUnread(token: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await gpost("/messages/batchModify", token, { ids, addLabelIds: ["UNREAD"] });
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids})`.catch(() => {});
 }

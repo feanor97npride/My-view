@@ -52,4 +52,11 @@ assert.equal(maisBarulhento(grupos)?.email, "n@news.com");
 assert.equal(maisBarulhento(grupos.slice(1)), null); // only 1 e-mail
 assert.equal(maisBarulhento([]), null);
 
+// archived (inInbox: false) counts as triado and leaves the queue
+const arquivado: TriItem = { ...mk("acao", true, "2026-11-18T11:00:00Z"), inInbox: false };
+assert.deepEqual(buildQueue([arquivado], null), []);
+assert.deepEqual(buildQueue([arquivado], "acao"), []);
+assert.equal(resumir([arquivado]).importantes, 0);
+assert.equal(resumir([arquivado]).importantesTriados, 1);
+
 console.log("triage: ok");

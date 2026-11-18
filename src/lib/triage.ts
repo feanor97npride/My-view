@@ -15,6 +15,7 @@ export type TriItem = {
   snippet: string;
   receivedAt: string; // ISO
   unread: boolean;
+  inInbox?: boolean; // false after archiving; omitted/true means still in inbox
   category: string;
   when: string; // already formatted ("14:05", "14 nov"), computed on the server so the time zone matches
   url: string; // opens the conversation in Gmail
@@ -32,25 +33,26 @@ export function senderInfo(raw: string): { nome: string; email: string; dominio:
 const RANK: Record<string, number> = { acao: 0, financeiro: 1, agendamento: 2, trabalho: 3, pessoal: 4 };
 
 const byAge = (a: TriItem, b: TriItem) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt); // oldest waits longest
+const isPending = (i: TriItem) => i.unread && i.inInbox !== false;
 
-// Order of the card in focus. With a queue filter: that category, unread first. Without: unread only,
+// Order of the card in focus. With a queue filter: that category still in inbox, unread first. Without: unread in inbox only,
 // important categories first, then Trabalho and Pessoal. Informativo never enters the default queue.
 export function buildQueue(items: TriItem[], filtro: Fila | null): TriItem[] {
   if (filtro && filtro !== "aguardando") {
     return items
-      .filter((i) => i.category === filtro)
+      .filter((i) => i.category === filtro && i.inInbox !== false)
       .sort((a, b) => Number(b.unread) - Number(a.unread) || (RANK[a.category] ?? 9) - (RANK[b.category] ?? 9) || byAge(a, b));
   }
   if (filtro === "aguardando") return [];
   return items
-    .filter((i) => i.unread && i.category in RANK)
+    .filter((i) => isPending(i) && i.category in RANK)
     .sort((a, b) => RANK[a.category] - RANK[b.category] || byAge(a, b));
 }
 
 export type Resumo = {
   total: number;
   porCategoria: Record<string, number>;
-  importantes: number; // unread in Ação + Financeiro + Agendamento
+  importantes: number; // unread & inInbox in Ação + Financeiro + Agendamento
   importantesTotal: number;
   importantesTriados: number;
 };
@@ -59,7 +61,7 @@ export function resumir(items: TriItem[]): Resumo {
   const porCategoria: Record<string, number> = {};
   for (const i of items) porCategoria[i.category] = (porCategoria[i.category] ?? 0) + 1;
   const imp = items.filter((i) => IMPORTANTES.includes(i.category));
-  const pendentes = imp.filter((i) => i.unread).length;
+  const pendentes = imp.filter(isPending).length;
   return { total: items.length, porCategoria, importantes: pendentes, importantesTotal: imp.length, importantesTriados: imp.length - pendentes };
 }
 

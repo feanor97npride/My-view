@@ -56,6 +56,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
     snippet: m.snippet,
     receivedAt: m.receivedAt.toISOString(),
     unread: m.unread,
+    inInbox: m.inInbox ?? true,
     category: m.category,
     when: shortDate(m.receivedAt, now, tz),
     url: gmailThreadUrl(account, m.threadId),

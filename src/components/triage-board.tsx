@@ -44,7 +44,7 @@ const ExtLink = ({ href, className, style, children }: { href: string; className
 );
 
 export default function TriageBoard({
-  items,
+  items: initialItems,
   waiting,
   waitingError,
   dateLine,
@@ -58,10 +58,17 @@ export default function TriageBoard({
   awaitingDays: number;
   initialFila: Fila | null;
 }) {
+  const [items, setItems] = useState<TriItem[]>(initialItems);
+  useEffect(() => setItems(initialItems), [initialItems]);
+
   const [filtro, setFiltro] = useState<Fila | null>(initialFila);
   const [q, setQ] = useState("");
   const [focusId, setFocusId] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ label: string; undo: () => void } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
 
@@ -75,11 +82,88 @@ export default function TriageBoard({
   const barulhento = maisBarulhento(grupos);
   const outros = grupos.filter((g) => g !== barulhento);
   const informativos = visible.filter((i) => i.category === "informativo");
+  const unreadInformativos = informativos.filter((i) => i.unread);
 
   const count = (f: Fila) => (f === "aguardando" ? (waiting ? waiting.length : null) : (resumo.porCategoria[f] ?? 0));
   const title = tituloResumo(resumo);
   const done = resumo.importantesTotal ? resumo.importantesTriados / resumo.importantesTotal : 1;
-  const unreadIn = (c: string) => visible.filter((i) => i.category === c && i.unread);
+  const unreadIn = (c: string) => visible.filter((i) => i.category === c && i.unread && i.inInbox !== false);
+
+  const showToast = (msg: string, undo: () => void) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ label: msg, undo });
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  };
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  const postAction = async (body: unknown): Promise<string | null> => {
+    try {
+      const res = await fetch("/api/emails/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) return null;
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      return j.error ?? `Erro ${res.status}`;
+    } catch {
+      return "Falha de conexão ao atualizar o Gmail.";
+    }
+  };
+
+  const archiveFocus = (item: TriItem) => {
+    setActionError(null);
+    const nextItem = queue.find((i) => i.id !== item.id) ?? null;
+    const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const commit = () => {
+      setLeaving(false);
+      setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, inInbox: false } : x)));
+      setFocusId(nextItem?.id ?? null);
+      const undo = () => {
+        setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, inInbox: true } : x)));
+        setFocusId(item.id);
+        void postAction({ action: "unarchive", id: item.id }).then((err) => {
+          if (err) setActionError(err);
+        });
+      };
+      showToast("Arquivado", undo);
+      void postAction({ action: "archive", id: item.id }).then((err) => {
+        if (err) {
+          setToast(null);
+          setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, inInbox: true } : x)));
+          setFocusId(item.id);
+          setActionError(err);
+        }
+      });
+    };
+    if (reduced) commit();
+    else {
+      setLeaving(true);
+      setTimeout(commit, 150);
+    }
+  };
+
+  const markInformativosRead = () => {
+    const ids = unreadInformativos.map((i) => i.id);
+    if (ids.length === 0) return;
+    setActionError(null);
+    const idSet = new Set(ids);
+    setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, unread: false } : x)));
+    const undo = () => {
+      setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, unread: true } : x)));
+      void postAction({ action: "markUnread", ids }).then((err) => {
+        if (err) setActionError(err);
+      });
+    };
+    showToast(`${plural(ids.length, "informativo marcado", "informativos marcados")} como lidos`, undo);
+    void postAction({ action: "markRead", ids }).then((err) => {
+      if (err) {
+        setToast(null);
+        setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, unread: true } : x)));
+        setActionError(err);
+      }
+    });
+  };
 
   const go = (delta: number) => {
     if (queue.length === 0) return;
@@ -97,7 +181,12 @@ export default function TriageBoard({
     const k = e.key.toLowerCase();
     if (k === "j" || k === "arrowright") go(1);
     else if (k === "k" || k === "arrowleft") go(-1);
-    else if (k === "/") {
+    else if (k === "a" && focus) archiveFocus(focus);
+    else if (k === "u" && toast) {
+      const undo = toast.undo;
+      setToast(null);
+      undo();
+    } else if (k === "/") {
       e.preventDefault();
       search.current?.focus();
     } else if (k === "?") setHelp((h) => !h);
@@ -159,6 +248,13 @@ export default function TriageBoard({
         </div>
       </header>
 
+      {actionError && (
+        <div role="alert" className="chip-red flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="btn min-h-9 px-3 py-1 text-xs">Fechar</button>
+        </div>
+      )}
+
       {/* 2 · Faixa de filas */}
       <nav aria-label="Filas por categoria" className="flex gap-2.5 overflow-x-auto pb-1 md:grid md:grid-cols-4 md:overflow-visible xl:grid-cols-7">
         {FILAS.map((f, n) => {
@@ -195,7 +291,7 @@ export default function TriageBoard({
               <div aria-hidden="true" className="absolute inset-x-4 -bottom-4 top-4 rounded-[28px] border border-line" style={{ background: "var(--line)" }} />
             </>
           )}
-          <div className={`${card} relative flex flex-col gap-5`} style={neutral}>
+          <div className={`${card} relative flex flex-col gap-5 transition duration-150 ${leaving ? "-translate-x-2 opacity-0" : ""}`} style={neutral}>
             {focus ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -221,8 +317,15 @@ export default function TriageBoard({
                   {decodeEntities(focus.snippet) || "Sem prévia disponível."}
                 </p>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <button
+                    type="button"
+                    onClick={() => archiveFocus(focus)}
+                    className="flex min-h-[84px] cursor-pointer flex-col items-center justify-center gap-1 rounded-[18px] border border-line-strong bg-transparent text-center font-semibold text-ink hover:bg-primary-soft"
+                  >
+                    <span>Arquivar</span>
+                    <span className="text-[11px] font-medium opacity-70">A</span>
+                  </button>
                   {[
-                    ["Arquivar", "A", {}],
                     ["Pôr na agenda", "G", { background: "var(--k-agendamento)", color: "var(--kt-agendamento)", borderColor: "transparent" }],
                     ["Virar tarefa", "T", { background: "var(--k-trabalho)", color: "var(--kt-trabalho)", borderColor: "transparent" }],
                     ["Responder", "R", { background: "var(--k-acao)", color: "var(--kt-acao)", borderColor: "transparent" }],
@@ -238,7 +341,7 @@ export default function TriageBoard({
                     </ExtLink>
                   ))}
                 </div>
-                <p className="m-0 text-xs text-mute">Nesta versão as ações abrem a conversa no Gmail. Arquivar, agenda e ClickUp diretos chegam na próxima etapa.</p>
+                <p className="m-0 text-xs text-mute">Arquivar já atua direto no Gmail. Agenda, ClickUp e resposta rápida chegam na próxima etapa.</p>
               </>
             ) : q.trim() ? (
               <div className="flex flex-col items-start gap-3">
@@ -370,8 +473,13 @@ export default function TriageBoard({
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled title="Disponível na próxima etapa" className="btn min-h-11 disabled:opacity-50">Resumir com IA</button>
-            <button type="button" disabled title="Disponível na próxima etapa (precisa de permissão de escrita no Gmail)" className="btn btn-primary min-h-11 disabled:opacity-50">
-              Marcar {informativos.length} como lidos
+            <button
+              type="button"
+              disabled={unreadInformativos.length === 0}
+              onClick={markInformativosRead}
+              className="btn btn-primary min-h-11 disabled:opacity-50"
+            >
+              {unreadInformativos.length === 0 ? "Tudo lido" : `Marcar ${unreadInformativos.length} como lidos`}
             </button>
           </div>
         </div>
@@ -412,6 +520,8 @@ export default function TriageBoard({
         <button type="button" onClick={() => setHelp((h) => !h)} aria-expanded={help} className="btn min-h-9 px-3 py-1 text-[13px]">Atalhos ( ? )</button>
         {help && (
           <p className="m-0 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span><Kbd>A</Kbd> arquivar</span>
+            <span><Kbd>U</Kbd> desfazer</span>
             <span><Kbd>J</Kbd> <Kbd>→</Kbd> próximo</span>
             <span><Kbd>K</Kbd> <Kbd>←</Kbd> anterior</span>
             <span><Kbd>1</Kbd>–<Kbd>7</Kbd> fila</span>
@@ -420,6 +530,27 @@ export default function TriageBoard({
           </p>
         )}
       </div>
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-24 right-4 z-30 flex items-center gap-3 rounded-2xl border border-line-strong bg-card px-4 py-3 text-sm font-medium shadow-lg md:bottom-6 md:right-6"
+        >
+          <span>{toast.label}</span>
+          <button
+            type="button"
+            onClick={() => {
+              const undo = toast.undo;
+              setToast(null);
+              undo();
+            }}
+            className="btn btn-primary min-h-9 px-3 py-1 text-xs"
+          >
+            Desfazer (U)
+          </button>
+        </div>
+      )}
     </div>
   );
 }

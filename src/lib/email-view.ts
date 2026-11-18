@@ -9,6 +9,7 @@ export type EmailItem = {
   unread: boolean;
   category: string;
   snippet: string; // short preview from Gmail, kept in memory only, never stored
+  inInbox?: boolean;
 };
 
 export const CATEGORY_LABEL: Record<string, string> = {
