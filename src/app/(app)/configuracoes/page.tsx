@@ -4,9 +4,9 @@ import { auth } from "@/auth";
 import Reconnect from "@/components/reconnect";
 import { listCalendars, pickCalendars } from "@/lib/calendar";
 import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
-import { CATEGORY_CHIP, CATEGORY_LABEL } from "@/lib/email-view";
+import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getEmailRules, getMeetingWindow, getSelectedCalendars, setEmailRules, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getEmailRules, getMeetingWindow, getSelectedCalendars, setAwaitingDays, setEmailRules, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -28,6 +28,15 @@ async function saveWindow(formData: FormData) {
   await setMeetingWindow(normalizeWindow(formData.get("janela")));
   revalidatePath("/", "layout");
   redirect("/configuracoes?aviso=ok");
+}
+
+async function saveAwaitingDays(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  await setAwaitingDays(normalizeAwaitingDays(formData.get("prazo")));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?prazo=ok");
 }
 
 async function addRule(formData: FormData) {
@@ -65,7 +74,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -76,11 +85,12 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, windowMin] = await Promise.all([
+  const [all, selected, rules, windowMin, awaitingDays] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
     getMeetingWindow().catch(() => 30),
+    getAwaitingDays().catch(() => 2),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
@@ -135,6 +145,25 @@ export default async function Configuracoes({
         <button type="submit" className="btn btn-primary min-h-11">Salvar aviso</button>
         {params.aviso && (
           <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Aviso salvo. A faixa das outras telas pode levar até 1 minuto para refletir.</p>
+        )}
+      </form>
+
+      <form action={saveAwaitingDays} className="card flex flex-wrap items-end gap-3">
+        <div className="w-full">
+          <h2 className="font-display text-xl font-semibold">Aguardando resposta</h2>
+          <p className="text-sm text-mute">Depois de quantos dias sem resposta uma conversa enviada por você entra na lista e no alerta de Hoje.</p>
+        </div>
+        <label className="flex flex-col gap-1 text-sm text-mute">
+          Prazo
+          <select name="prazo" defaultValue={String(awaitingDays)} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+            {PRAZOS_AGUARDANDO.map((d) => (
+              <option key={d} value={d}>{d} {d === 1 ? "dia" : "dias"}</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="btn btn-primary min-h-11">Salvar prazo</button>
+        {params.prazo && (
+          <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Prazo salvo.</p>
         )}
       </form>
 

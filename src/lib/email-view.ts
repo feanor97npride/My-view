@@ -75,6 +75,13 @@ export function gmailThreadUrl(account: string, threadId: string): string {
 }
 
 export const AGUARDANDO_DIAS = 2;
+export const PRAZOS_AGUARDANDO = [1, 2, 3, 5, 7];
+
+// Anything that is not one of the allowed deadlines falls back to the default.
+export function normalizeAwaitingDays(v: unknown): number {
+  const n = Number(v);
+  return PRAZOS_AGUARDANDO.includes(n) ? n : AGUARDANDO_DIAS;
+}
 
 export type ThreadLike = {
   id: string;
@@ -82,8 +89,8 @@ export type ThreadLike = {
 };
 export type Awaiting = { threadId: string; to: string; subject: string; sentAt: Date; dias: number };
 
-// Conversations whose last message is mine, sent AGUARDANDO_DIAS or more ago, and not only to myself.
-export function pickAwaiting(threads: ThreadLike[], myEmail: string, now: Date): Awaiting[] {
+// Conversations whose last message is mine, sent minDays or more ago, and not only to myself.
+export function pickAwaiting(threads: ThreadLike[], myEmail: string, now: Date, minDays = AGUARDANDO_DIAS): Awaiting[] {
   const me = myEmail.trim().toLowerCase();
   const out: Awaiting[] = [];
   for (const t of threads) {
@@ -92,7 +99,7 @@ export function pickAwaiting(threads: ThreadLike[], myEmail: string, now: Date):
     if (!last?.labelIds?.includes("SENT") || last.labelIds.includes("DRAFT")) continue;
     const sentAt = new Date(Number(last.internalDate));
     const dias = Math.floor((now.getTime() - sentAt.getTime()) / 86_400_000);
-    if (dias < AGUARDANDO_DIAS) continue;
+    if (dias < minDays) continue;
     const header = (n: string) => last.payload.headers.find((h) => h.name.toLowerCase() === n)?.value ?? "";
     // shortcut: recipients are split on commas, so a quoted name containing a comma is read as two people
     const people = header("to").split(",").map(parseSender).filter((p) => p.name);

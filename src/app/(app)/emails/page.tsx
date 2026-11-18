@@ -2,8 +2,9 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import Reconnect from "@/components/reconnect";
 import { primaryTz } from "@/lib/calendar";
-import { AGUARDANDO_DIAS, CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails, gmailThreadUrl, parseSender, shortDate } from "@/lib/email-view";
+import { CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails, gmailThreadUrl, parseSender, shortDate } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
+import { getAwaitingDays } from "@/lib/prefs";
 
 export const metadata = { title: "E-mails" };
 
@@ -26,11 +27,13 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
   const naolidos = params.naolidos === "1";
   const q = params.q?.slice(0, 100);
 
+  const awaitingDays = await getAwaitingDays().catch(() => 2);
+
   // shortcut: a Gmail failure shows a note instead of an error page
   const [mail, tz, waiting] = await Promise.all([
     syncEmails(token).catch((e: Error) => e),
     primaryTz(token).catch(() => "UTC"),
-    aguardando ? awaitingReply(token, account).catch((e: Error) => e) : null,
+    aguardando ? awaitingReply(token, account, awaitingDays).catch((e: Error) => e) : null,
   ]);
   const now = new Date();
 
@@ -77,7 +80,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
           {aguardando ? (
             <>
               <p className="text-sm text-mute">
-                Conversas em que a sua mensagem é a última e não houve resposta há {AGUARDANDO_DIAS} dias ou mais (últimos 14 dias).
+                Conversas em que a sua mensagem é a última e não houve resposta há {awaitingDays} {awaitingDays === 1 ? "dia" : "dias"} ou mais (últimos 14 dias).
               </p>
               {waiting instanceof Error && <p className="text-sm text-mute">Não foi possível ler os enviados: {waiting.message}</p>}
               {Array.isArray(waiting) && waiting.length === 0 && <p className="card text-mute">Nada aguardando resposta.</p>}

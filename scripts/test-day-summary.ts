@@ -65,6 +65,11 @@ assert.equal(meetingStatus([ev("next", 5, 60), ev("current", -30, 10)], now)?.ev
 assert.equal(meetingStatus([ev("a", 45, 90)], now, 60)?.kind, "soon"); // custom window
 assert.equal(meetingStatus([{ id: "bad", title: "bad", start: "nope", end: "nope" }], now), null); // invalid dates ignored
 
+assert.equal(
+  staticAlerts({ overdue: 0, oldestOverdueDays: 0, dueToday: 0, actionEmails: 0, awaiting: 2, awaitingDays: 5 })[0].text,
+  "2 conversas aguardando resposta há 5+ dias",
+);
+
 // normalizeWindow
 assert.equal(normalizeWindow(15), 15);
 assert.equal(normalizeWindow("10"), 10);

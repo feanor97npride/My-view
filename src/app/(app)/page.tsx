@@ -7,7 +7,7 @@ import { openTasks, type Task } from "@/lib/clickup";
 import { staticAlerts, summarize } from "@/lib/day-summary";
 import { gmailThreadUrl } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
-import { getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
 
 const KPI_ICONS = {
   agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
@@ -58,8 +58,11 @@ export default async function Home() {
   // shortcut: a ClickUp or Gmail failure shows a note instead of breaking the rest of the page
   const tasks = await openTasks().catch((e: Error) => e);
   const mail = session?.accessToken ? await syncEmails(session.accessToken).catch((e: Error) => e) : null;
+  const awaitingDays = await getAwaitingDays().catch(() => 2);
   const waiting =
-    session?.accessToken && session.user?.email ? await awaitingReply(session.accessToken, session.user.email).catch(() => null) : null;
+    session?.accessToken && session.user?.email
+      ? await awaitingReply(session.accessToken, session.user.email, awaitingDays).catch(() => null)
+      : null;
 
   const now = new Date();
   const tz = today?.tz ?? "UTC";
@@ -94,7 +97,7 @@ export default async function Home() {
     nextEventTime: nextEvent ? fmt(nextEvent.start) : null,
     ...counts,
   });
-  const alerts = staticAlerts({ ...counts, oldestOverdueDays });
+  const alerts = staticAlerts({ ...counts, oldestOverdueDays, awaitingDays });
   const timed = (today?.events ?? [])
     .filter((e) => !e.allDay && e.end > now)
     .map((e) => ({ id: e.id, title: e.title, start: e.start.toISOString(), end: e.end.toISOString() }));

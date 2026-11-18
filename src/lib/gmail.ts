@@ -144,7 +144,7 @@ export async function unreadActionCount(): Promise<number> {
 
 // Conversations where my message is the last one and nobody answered yet (sent mail, last 14 days).
 // shortcut: at most 30 conversations, upgrade with pagination if you send more than that in two weeks
-export async function awaitingReply(token: string, myEmail: string, now = new Date()): Promise<Awaiting[]> {
+export async function awaitingReply(token: string, myEmail: string, minDays: number, now = new Date()): Promise<Awaiting[]> {
   const list = await gget<{ threads?: { id: string }[] }>(
     `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=30`,
     token,
@@ -154,5 +154,5 @@ export async function awaitingReply(token: string, myEmail: string, now = new Da
       gget<ThreadLike>(`/threads/${t.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`, token),
     ),
   );
-  return pickAwaiting(threads, myEmail, now);
+  return pickAwaiting(threads, myEmail, now, minDays);
 }

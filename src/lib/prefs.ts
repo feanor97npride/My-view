@@ -2,10 +2,12 @@
 import { neon } from "@neondatabase/serverless";
 
 import { normalizeWindow } from "./day-summary";
+import { normalizeAwaitingDays } from "./email-view";
 import { normalizeRule, type EmailRule } from "./email-rules";
 
 const CALENDARS = "calendars";
 const EMAIL_RULES = "email_rules";
+const AWAITING_DAYS = "awaiting_days";
 const MEETING_WINDOW = "meeting_window_min";
 
 // null = nothing saved yet, meaning "show every calendar".
@@ -48,5 +50,19 @@ export async function setMeetingWindow(minutes: number): Promise<void> {
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`
     INSERT INTO preferences (key, value) VALUES (${MEETING_WINDOW}, ${JSON.stringify(normalizeWindow(minutes))}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
+}
+
+// Days without an answer before a sent conversation counts as "aguardando resposta"; 2 until the owner changes it.
+export async function getAwaitingDays(): Promise<number> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  const rows = await sql`SELECT value FROM preferences WHERE key = ${AWAITING_DAYS}`;
+  return normalizeAwaitingDays(rows[0]?.value);
+}
+
+export async function setAwaitingDays(days: number): Promise<void> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  await sql`
+    INSERT INTO preferences (key, value) VALUES (${AWAITING_DAYS}, ${JSON.stringify(normalizeAwaitingDays(days))}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
 }

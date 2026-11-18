@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types --no-warnings scripts/test-email-view.ts
 import assert from "node:assert/strict";
-import { decodeEntities, filterEmails, parseSender, pickAwaiting, shortDate } from "../src/lib/email-view.ts";
+import { decodeEntities, normalizeAwaitingDays, filterEmails, parseSender, pickAwaiting, shortDate } from "../src/lib/email-view.ts";
 
 // parseSender
 assert.deepEqual(parseSender("Vercel <notifications@vercel.com>"), { name: "Vercel", address: "notifications@vercel.com" });
@@ -61,3 +61,11 @@ assert.equal(got[2].to, "(sem destinatário visível)");
 assert.deepEqual(pickAwaiting([], "me@x.com", now), []);
 
 console.log("email-view: ok");
+
+// custom deadline and normalizeAwaitingDays
+assert.equal(normalizeAwaitingDays(3), 3);
+assert.equal(normalizeAwaitingDays("7"), 7);
+assert.equal(normalizeAwaitingDays(4), 2);
+assert.equal(normalizeAwaitingDays(null), 2);
+assert.ok(pickAwaiting(threads, "ME@x.com", now, 1).length >= got.length); // shorter deadline never shows fewer
+assert.equal(pickAwaiting(threads, "ME@x.com", now, 365).length, 0); // very long deadline shows none

@@ -9,7 +9,6 @@ export function normalizeWindow(v: unknown): number {
   const n = Number(v);
   return JANELAS_REUNIAO.includes(n) ? n : ALERTA_REUNIAO_MIN;
 }
-const AGUARDANDO_DIAS = 2; // keep equal to AGUARDANDO_DIAS in email-view.ts (this file has no imports)
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 const oneDecimal = (h: number) => String(Math.round(h * 10) / 10).replace(".", ",");
@@ -54,6 +53,7 @@ export function staticAlerts(i: {
   dueToday: number | null;
   actionEmails: number | null;
   awaiting?: number | null;
+  awaitingDays?: number; // deadline in days, as chosen in Configurações
 }): Alert[] {
   const out: Alert[] = [];
   if (i.overdue) {
@@ -84,7 +84,7 @@ export function staticAlerts(i: {
       id: "awaiting",
       tone: "amber",
       label: "Sem resposta",
-      text: `${plural(i.awaiting, "conversa", "conversas")} aguardando resposta há ${AGUARDANDO_DIAS}+ dias`,
+      text: `${plural(i.awaiting, "conversa", "conversas")} aguardando resposta há ${i.awaitingDays ?? 2}+ dias`,
       href: "/emails?categoria=aguardando",
     });
   }
