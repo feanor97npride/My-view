@@ -1,4 +1,5 @@
 import { auth, signOut } from "@/auth";
+import { unreadActionCount } from "@/lib/gmail";
 import NavLinks from "@/components/nav-links";
 import ThemeToggle from "@/components/theme-toggle";
 
@@ -32,6 +33,8 @@ function SignOut() {
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   const name = session?.user?.name ?? "Usuário";
+  // badge is optional: a database failure just hides it
+  const badges: Record<string, number> = { "/emails": await unreadActionCount().catch(() => 0) };
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -43,7 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </a>
       <aside className="hidden w-[248px] shrink-0 flex-col gap-7 border-r border-line bg-card p-5 md:flex">
         <Brand />
-        <NavLinks variant="side" />
+        <NavLinks variant="side" badges={badges} />
         <div className="mt-auto flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft font-bold text-primary-ink" aria-hidden="true">
             {name.charAt(0).toUpperCase()}
@@ -65,7 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div id="conteudo" tabIndex={-1} className="min-w-0 flex-1 pb-24 outline-none md:pb-0">
         {children}
       </div>
-      <NavLinks variant="bottom" />
+      <NavLinks variant="bottom" badges={badges} />
     </div>
   );
 }

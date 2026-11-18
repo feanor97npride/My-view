@@ -15,7 +15,7 @@ const LINKS = [
   },
 ];
 
-export default function NavLinks({ variant }: { variant: "side" | "bottom" }) {
+export default function NavLinks({ variant, badges = {} }: { variant: "side" | "bottom"; badges?: Record<string, number> }) {
   const path = usePathname();
   const side = variant === "side";
   return (
@@ -39,6 +39,12 @@ export default function NavLinks({ variant }: { variant: "side" | "bottom" }) {
               <path d={l.icon} />
             </svg>
             {l.label}
+            {badges[l.href] > 0 && (
+              <span className="chip chip-violet ml-auto min-w-5 justify-center px-1.5 py-0 text-[11px]">
+                {badges[l.href] > 99 ? "99+" : badges[l.href]}
+                <span className="sr-only"> pendentes</span>
+              </span>
+            )}
           </Link>
         );
       })}

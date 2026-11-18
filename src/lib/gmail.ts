@@ -135,6 +135,13 @@ export async function emailCounts(): Promise<Record<string, number>> {
   return Object.fromEntries(rows.map((c) => [c.category, c.n]));
 }
 
+// Unread action e-mails from the database only (no Gmail call), cheap enough for the menu badge on every page.
+export async function unreadActionCount(): Promise<number> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  const rows = await sql`SELECT COUNT(*)::int AS n FROM emails WHERE unread AND category = 'acao' AND received_at > now() - interval '7 days'`;
+  return rows[0]?.n ?? 0;
+}
+
 // Conversations where my message is the last one and nobody answered yet (sent mail, last 14 days).
 // shortcut: at most 30 conversations, upgrade with pagination if you send more than that in two weeks
 export async function awaitingReply(token: string, myEmail: string, now = new Date()): Promise<Awaiting[]> {
