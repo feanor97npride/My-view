@@ -27,7 +27,7 @@ export default function NavLinks({ variant, badges = {} }: { variant: "side" | "
         const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
         const base = side
           ? "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[15px] no-underline"
-          : "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] no-underline";
+          : "relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] no-underline";
         return (
           <Link
             key={l.href}
@@ -40,7 +40,7 @@ export default function NavLinks({ variant, badges = {} }: { variant: "side" | "
             </svg>
             {l.label}
             {badges[l.href] > 0 && (
-              <span className="chip chip-violet ml-auto min-w-5 justify-center px-1.5 py-0 text-[11px]">
+              <span className={`chip ${l.href === "/" ? "chip-red" : "chip-violet"} min-w-5 justify-center px-1.5 py-0 text-[11px] ${side ? "ml-auto" : "absolute right-2 top-0"}`}>
                 {badges[l.href] > 99 ? "99+" : badges[l.href]}
                 <span className="sr-only"> pendentes</span>
               </span>

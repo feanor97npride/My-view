@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 // Read-only ClickUp tasks from the lists the owner picked (ids from the workspace hierarchy).
 const API = "https://api.clickup.com/api/v2";
 const LISTS = [
@@ -105,6 +107,13 @@ export async function openTasks(now = new Date()): Promise<Task[]> {
     })
     .sort((a, b) => (a.due?.getTime() ?? Infinity) - (b.due?.getTime() ?? Infinity));
 }
+
+// Overdue plus due-today tasks, cached for 60 s so the menu badge does not hit ClickUp on every page.
+export const urgentTasksCount = unstable_cache(
+  async () => (await openTasks()).filter((t) => t.bucket === "overdue" || t.bucket === "today").length,
+  ["urgent-tasks-count"],
+  { revalidate: 60 },
+);
 
 // When tasks were completed during the last `days` days.
 export async function completedDates(days = 14, now = new Date()): Promise<Date[]> {

@@ -1,4 +1,5 @@
 import { auth, signOut } from "@/auth";
+import { urgentTasksCount } from "@/lib/clickup";
 import { unreadActionCount } from "@/lib/gmail";
 import NavLinks from "@/components/nav-links";
 import ThemeToggle from "@/components/theme-toggle";
@@ -34,7 +35,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   const name = session?.user?.name ?? "Usuário";
   // badge is optional: a database failure just hides it
-  const badges: Record<string, number> = { "/emails": await unreadActionCount().catch(() => 0) };
+  const [mailCount, taskCount] = await Promise.all([unreadActionCount().catch(() => 0), urgentTasksCount().catch(() => 0)]);
+  const badges: Record<string, number> = { "/": taskCount, "/emails": mailCount };
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
