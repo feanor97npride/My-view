@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CATEGORIES } from "@/lib/email-rules";
 import { CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
 import {
   FILAS,
@@ -312,6 +313,44 @@ export default function TriageBoard({
     });
   };
 
+  const recategorizeFocus = (item: TriItem, category: string) => {
+    if (!category || category === item.category) return;
+    const senderEmail = senderInfo(item.sender).email;
+    const prevCat = item.category;
+    const affectedIds = new Set(
+      items.filter((x) => (senderEmail ? senderInfo(x.sender).email === senderEmail : x.id === item.id)).map((x) => x.id),
+    );
+    const prevCats = new Map(items.filter((x) => affectedIds.has(x.id)).map((x) => [x.id, x.category]));
+    setActionError(null);
+    setItems((prev) => prev.map((x) => (affectedIds.has(x.id) ? { ...x, category } : x)));
+    void postAction<{ prevRule?: string | null }>({
+      action: "recategorize",
+      emailId: item.id,
+      senderEmail,
+      category,
+    }).then((r) => {
+      if (!r.ok) {
+        setItems((prev) => prev.map((x) => (prevCats.has(x.id) ? { ...x, category: prevCats.get(x.id)! } : x)));
+        setActionError(r.error);
+        return;
+      }
+      const hadRule = r.data.prevRule ?? null;
+      showToast(`Categoria: ${label(category)} (regra salva)`, () => {
+        setItems((prev) => prev.map((x) => (prevCats.has(x.id) ? { ...x, category: prevCats.get(x.id)! } : x)));
+        setFocusId(item.id);
+        void postAction({
+          action: "unrecategorize",
+          emailId: item.id,
+          senderEmail,
+          previousCategory: prevCat,
+          hadRule,
+        }).then((u) => {
+          if (!u.ok) setActionError(u.error);
+        });
+      });
+    });
+  };
+
   const go = (delta: number) => {
     if (queue.length === 0) return;
     setSched(null);
@@ -451,9 +490,19 @@ export default function TriageBoard({
             {focus ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-[0.08em] text-mute">Em foco</span>
                     <span className="rounded-full px-3 py-1 text-xs font-bold" style={fill(focus.category)}>{label(focus.category)}</span>
+                    <select
+                      aria-label="Mudar categoria"
+                      value={focus.category}
+                      onChange={(e) => recategorizeFocus(focus, e.target.value)}
+                      className="min-h-8 rounded-full border border-line-strong bg-card px-2.5 text-xs font-medium text-mute hover:text-ink"
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{label(c)}</option>
+                      ))}
+                    </select>
                   </span>
                   <span className="text-xs text-mute">
                     {focus.when}

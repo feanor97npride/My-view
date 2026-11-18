@@ -261,3 +261,8 @@ export async function summarizeInformativosWithAI(
   if (!text) throw new Error("A IA não retornou um resumo.");
   return text;
 }
+
+export async function updateEmailCategory(id: string, category: string, by = "rule:user"): Promise<void> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id}`.catch(() => {});
+}

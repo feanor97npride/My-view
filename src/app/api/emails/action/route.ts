@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createCalendarEvent, deleteCalendarEvent } from "@/lib/calendar";
 import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
-import { archiveEmail, createFollowupDraft, deleteDraft, markEmailsRead, markEmailsUnread, summarizeInformativosWithAI, unarchiveEmail } from "@/lib/gmail";
-import { getDefaultClickupList } from "@/lib/prefs";
+import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
+import { archiveEmail, createFollowupDraft, deleteDraft, markEmailsRead, markEmailsUnread, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
+import { getDefaultClickupList, getEmailRules, setEmailRules } from "@/lib/prefs";
 
 type Payload =
   | { action: "archive" | "unarchive"; id: string }
@@ -14,7 +15,9 @@ type Payload =
   | { action: "untask"; taskId: string }
   | { action: "followup"; threadId: string; to: string; subject: string }
   | { action: "unfollowup"; draftId: string }
-  | { action: "summarize"; items: { sender: string; subject: string; snippet: string }[] };
+  | { action: "summarize"; items: { sender: string; subject: string; snippet: string }[] }
+  | { action: "recategorize"; emailId: string; senderEmail: string; category: string }
+  | { action: "unrecategorize"; emailId: string; senderEmail: string; previousCategory: string; hadRule?: string | null };
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -93,6 +96,30 @@ export async function POST(req: Request) {
         })),
       );
       return NextResponse.json({ ok: true, summary });
+    }
+    if (body.action === "recategorize") {
+      const rule = normalizeRule({ match: String(body.senderEmail ?? ""), category: String(body.category ?? "") });
+      if (!rule) return NextResponse.json({ error: "Remetente ou categoria inválidos para criar regra." }, { status: 400 });
+      const existing = await getEmailRules().catch(() => []);
+      const prevRule = existing.find((r) => r.match === rule.match)?.category ?? null;
+      const others = existing.filter((r) => r.match !== rule.match);
+      if (others.length >= MAX_RULES) {
+        return NextResponse.json({ error: `Limite de ${MAX_RULES} regras atingido em Configurações.` }, { status: 400 });
+      }
+      await setEmailRules([...others, rule]);
+      if (body.emailId) await updateEmailCategory(body.emailId, rule.category, "rule:user");
+      return NextResponse.json({ ok: true, prevRule });
+    }
+    if (body.action === "unrecategorize") {
+      const match = String(body.senderEmail ?? "").trim().toLowerCase();
+      const existing = await getEmailRules().catch(() => []);
+      const others = existing.filter((r) => r.match !== match);
+      const restored = body.hadRule && isCategory(body.hadRule) ? [...others, { match, category: body.hadRule }] : others;
+      await setEmailRules(restored);
+      if (body.emailId && isCategory(body.previousCategory)) {
+        await updateEmailCategory(body.emailId, body.previousCategory, "ai");
+      }
+      return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
   } catch (err) {
