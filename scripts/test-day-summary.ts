@@ -37,6 +37,15 @@ assert.equal(alerts[2].text, "1 e-mail de ação por ler");
 assert.equal(staticAlerts({ overdue: 1, oldestOverdueDays: 1, dueToday: 1, actionEmails: 0 })[0].text, "1 tarefa atrasada, a mais antiga há 1 dia");
 assert.equal(staticAlerts({ overdue: 1, oldestOverdueDays: 0, dueToday: 0, actionEmails: 0 })[0].text, "1 tarefa atrasada");
 
+// awaiting-reply alert
+assert.deepEqual(staticAlerts({ overdue: 0, oldestOverdueDays: 0, dueToday: 0, actionEmails: 0, awaiting: 0 }), []);
+assert.deepEqual(staticAlerts({ overdue: 0, oldestOverdueDays: 0, dueToday: 0, actionEmails: 0, awaiting: null }), []);
+const aw = staticAlerts({ overdue: 0, oldestOverdueDays: 0, dueToday: 0, actionEmails: 0, awaiting: 3 });
+assert.equal(aw[0].id, "awaiting");
+assert.equal(aw[0].href, "/emails?categoria=aguardando");
+assert.equal(aw[0].text, "3 conversas aguardando resposta há 2+ dias");
+assert.equal(staticAlerts({ overdue: 0, oldestOverdueDays: 0, dueToday: 0, actionEmails: 0, awaiting: 1 })[0].text, "1 conversa aguardando resposta há 2+ dias");
+
 // meetingStatus
 const now = new Date("2026-11-17T15:00:00Z");
 const at = (min: number) => new Date(now.getTime() + min * 60_000).toISOString();

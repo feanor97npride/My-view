@@ -6,7 +6,7 @@ import { busyHours, timeline } from "@/lib/calendar";
 import { openTasks, type Task } from "@/lib/clickup";
 import { staticAlerts, summarize } from "@/lib/day-summary";
 import { gmailThreadUrl } from "@/lib/email-view";
-import { syncEmails } from "@/lib/gmail";
+import { awaitingReply, syncEmails } from "@/lib/gmail";
 import { getSelectedCalendars } from "@/lib/prefs";
 
 const KPI_ICONS = {
@@ -57,6 +57,8 @@ export default async function Home() {
   // shortcut: a ClickUp or Gmail failure shows a note instead of breaking the rest of the page
   const tasks = await openTasks().catch((e: Error) => e);
   const mail = session?.accessToken ? await syncEmails(session.accessToken).catch((e: Error) => e) : null;
+  const waiting =
+    session?.accessToken && session.user?.email ? await awaitingReply(session.accessToken, session.user.email).catch(() => null) : null;
 
   const now = new Date();
   const tz = today?.tz ?? "UTC";
@@ -83,6 +85,7 @@ export default async function Home() {
     overdue: tasksOk ? overdue : null,
     dueToday: tasksOk ? dueToday : null,
     actionEmails: mailOk ? actions.length : null,
+    awaiting: waiting ? waiting.length : null,
   };
   const summary = summarize({
     eventsCount: today ? today.events.length : null,

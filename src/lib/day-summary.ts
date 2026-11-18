@@ -2,6 +2,7 @@
 // Unknown data (a source that failed) is passed as null and simply left out of the text.
 
 export const ALERTA_REUNIAO_MIN = 30;
+const AGUARDANDO_DIAS = 2; // keep equal to AGUARDANDO_DIAS in email-view.ts (this file has no imports)
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 const oneDecimal = (h: number) => String(Math.round(h * 10) / 10).replace(".", ",");
@@ -45,6 +46,7 @@ export function staticAlerts(i: {
   oldestOverdueDays: number;
   dueToday: number | null;
   actionEmails: number | null;
+  awaiting?: number | null;
 }): Alert[] {
   const out: Alert[] = [];
   if (i.overdue) {
@@ -68,6 +70,15 @@ export function staticAlerts(i: {
       label: "E-mails",
       text: `${plural(i.actionEmails, "e-mail de ação", "e-mails de ação")} por ler`,
       href: "/emails?categoria=acao&naolidos=1",
+    });
+  }
+  if (i.awaiting) {
+    out.push({
+      id: "awaiting",
+      tone: "amber",
+      label: "Sem resposta",
+      text: `${plural(i.awaiting, "conversa", "conversas")} aguardando resposta há ${AGUARDANDO_DIAS}+ dias`,
+      href: "/emails?categoria=aguardando",
     });
   }
   return out;
