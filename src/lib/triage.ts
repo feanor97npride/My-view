@@ -74,7 +74,7 @@ export type GrupoInformativo = { email: string; nome: string; qtd: number; ultim
 export function agruparInformativos(items: TriItem[]): GrupoInformativo[] {
   const map = new Map<string, TriItem[]>();
   for (const i of items) {
-    if (i.category !== "informativo") continue;
+    if (i.category !== "informativo" || i.inInbox === false) continue;
     const key = senderInfo(i.sender).email || i.sender;
     map.set(key, [...(map.get(key) ?? []), i]);
   }

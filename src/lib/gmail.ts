@@ -266,3 +266,33 @@ export async function updateEmailCategory(id: string, category: string, by = "ru
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id}`.catch(() => {});
 }
+
+export async function muteSenderFilter(token: string, senderEmail: string, archiveIds: string[] = []): Promise<{ id: string }> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/settings/filters", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      criteria: { from: senderEmail },
+      action: { removeLabelIds: ["INBOX"] },
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = (await res.json()) as { id: string };
+  if (archiveIds.length > 0) {
+    await gpost("/messages/batchModify", token, { ids: archiveIds, removeLabelIds: ["INBOX"] }).catch(() => {});
+  }
+  return { id: j.id };
+}
+
+export async function deleteSenderFilter(token: string, filterId: string, restoreIds: string[] = []): Promise<void> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/settings/filters/${encodeURIComponent(filterId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (restoreIds.length > 0) {
+    await gpost("/messages/batchModify", token, { ids: restoreIds, addLabelIds: ["INBOX"] }).catch(() => {});
+  }
+}

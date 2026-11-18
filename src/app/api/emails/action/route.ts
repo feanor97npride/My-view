@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { createCalendarEvent, deleteCalendarEvent } from "@/lib/calendar";
 import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
 import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
-import { archiveEmail, createFollowupDraft, deleteDraft, markEmailsRead, markEmailsUnread, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
+import { archiveEmail, createFollowupDraft, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
 import { getDefaultClickupList, getEmailRules, setEmailRules } from "@/lib/prefs";
 
 type Payload =
@@ -17,7 +17,9 @@ type Payload =
   | { action: "unfollowup"; draftId: string }
   | { action: "summarize"; items: { sender: string; subject: string; snippet: string }[] }
   | { action: "recategorize"; emailId: string; senderEmail: string; category: string }
-  | { action: "unrecategorize"; emailId: string; senderEmail: string; previousCategory: string; hadRule?: string | null };
+  | { action: "unrecategorize"; emailId: string; senderEmail: string; previousCategory: string; hadRule?: string | null }
+  | { action: "mute"; email: string; ids?: string[] }
+  | { action: "unmute"; filterId: string; ids?: string[] };
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -119,6 +121,16 @@ export async function POST(req: Request) {
       if (body.emailId && isCategory(body.previousCategory)) {
         await updateEmailCategory(body.emailId, body.previousCategory, "ai");
       }
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "mute" && typeof body.email === "string" && body.email.includes("@")) {
+      const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === "string" && x) : [];
+      const created = await muteSenderFilter(token, body.email.trim(), ids);
+      return NextResponse.json({ ok: true, filterId: created.id });
+    }
+    if (body.action === "unmute" && typeof body.filterId === "string" && body.filterId) {
+      const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === "string" && x) : [];
+      await deleteSenderFilter(token, body.filterId, ids);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });

@@ -86,7 +86,7 @@ export default function TriageBoard({
   const grupos = useMemo(() => agruparInformativos(visible), [visible]);
   const barulhento = maisBarulhento(grupos);
   const outros = grupos.filter((g) => g !== barulhento);
-  const informativos = visible.filter((i) => i.category === "informativo");
+  const informativos = visible.filter((i) => i.category === "informativo" && i.inInbox !== false);
   const unreadInformativos = informativos.filter((i) => i.unread);
 
   const count = (f: Fila) => (f === "aguardando" ? (waiting ? waiting.length : null) : (resumo.porCategoria[f] ?? 0));
@@ -347,6 +347,32 @@ export default function TriageBoard({
         }).then((u) => {
           if (!u.ok) setActionError(u.error);
         });
+      });
+    });
+  };
+
+  const muteSender = (email: string, nome: string) => {
+    if (!email.includes("@")) return;
+    const ids = items
+      .filter((i) => i.category === "informativo" && i.inInbox !== false && senderInfo(i.sender).email === email)
+      .map((i) => i.id);
+    const idSet = new Set(ids);
+    setActionError(null);
+    setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, inInbox: false } : x)));
+    void postAction<{ filterId?: string }>({ action: "mute", email, ids }).then((r) => {
+      if (!r.ok) {
+        setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, inInbox: true } : x)));
+        setActionError(r.error);
+        return;
+      }
+      const filterId = r.data.filterId;
+      showToast(`${nome} silenciado no Gmail`, () => {
+        setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, inInbox: true } : x)));
+        if (filterId) {
+          void postAction({ action: "unmute", filterId, ids }).then((u) => {
+            if (!u.ok) setActionError(u.error);
+          });
+        }
       });
     });
   };
@@ -778,7 +804,19 @@ export default function TriageBoard({
                 <span className="text-[13px] font-bold uppercase tracking-[0.06em]" style={{ color: "#4b4d78" }}>Mais barulhento · {barulhento.qtd}</span>
                 <span className="font-display text-xl font-bold">{barulhento.nome}</span>
                 <span className="text-sm" style={{ color: "#3a3c5c" }}>{barulhento.assuntos.join(" · ")}</span>
-                <ExtLink href={barulhento.url} className="mt-auto text-sm font-semibold" style={{ color: "#3730a3" }}>Abrir o mais recente</ExtLink>
+                <div className="mt-auto flex flex-wrap items-center gap-4 pt-2">
+                  <ExtLink href={barulhento.url} className="text-sm font-semibold" style={{ color: "#3730a3" }}>Abrir o mais recente</ExtLink>
+                  {barulhento.email.includes("@") && (
+                    <button
+                      type="button"
+                      onClick={() => muteSender(barulhento.email, barulhento.nome)}
+                      className="cursor-pointer bg-transparent p-0 text-sm font-semibold"
+                      style={{ color: "#4b4d78" }}
+                    >
+                      Silenciar
+                    </button>
+                  )}
+                </div>
               </article>
             )}
             {outros.slice(0, barulhento ? 2 : 3).map((g) => (
@@ -789,7 +827,18 @@ export default function TriageBoard({
                   <span className="text-xs text-mute">{g.qtd > 1 ? `${g.qtd} e-mails` : g.ultimo}</span>
                 </span>
                 <span className="line-clamp-2 text-sm text-mute">{g.linha}</span>
-                <ExtLink href={g.url} className="mt-auto text-sm font-semibold">Abrir</ExtLink>
+                <div className="mt-auto flex flex-wrap items-center gap-4 pt-2">
+                  <ExtLink href={g.url} className="text-sm font-semibold">Abrir</ExtLink>
+                  {g.email.includes("@") && (
+                    <button
+                      type="button"
+                      onClick={() => muteSender(g.email, g.nome)}
+                      className="cursor-pointer bg-transparent p-0 text-sm font-semibold text-mute hover:text-ink"
+                    >
+                      Silenciar
+                    </button>
+                  )}
+                </div>
               </article>
             ))}
           </div>
