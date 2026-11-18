@@ -70,6 +70,8 @@ export default function TriageBoard({
   const [toast, setToast] = useState<{ label: string; undo: () => void } | null>(null);
   const [sched, setSched] = useState<{ id: string; title: string; start: string; minutes: number } | null>(null);
   const [drafted, setDrafted] = useState<Record<string, boolean>>({});
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -286,6 +288,27 @@ export default function TriageBoard({
           });
         }
       });
+    });
+  };
+
+  const summarizeInformativos = () => {
+    if (informativos.length === 0 || summarizing) return;
+    setActionError(null);
+    setSummarizing(true);
+    void postAction<{ summary?: string }>({
+      action: "summarize",
+      items: informativos.slice(0, 30).map((i) => ({
+        sender: senderInfo(i.sender).nome,
+        subject: i.subject,
+        snippet: decodeEntities(i.snippet),
+      })),
+    }).then((r) => {
+      setSummarizing(false);
+      if (!r.ok) {
+        setActionError(r.error);
+        return;
+      }
+      setAiSummary(r.data.summary ?? null);
     });
   };
 
@@ -670,7 +693,14 @@ export default function TriageBoard({
             <p className="m-0 text-sm text-mute">{plural(informativos.length, "informativo", "informativos")}, sem decisão um a um</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled title="Disponível na próxima etapa" className="btn min-h-11 disabled:opacity-50">Resumir com IA</button>
+            <button
+              type="button"
+              disabled={informativos.length === 0 || summarizing}
+              onClick={summarizeInformativos}
+              className="btn min-h-11 disabled:opacity-50"
+            >
+              {summarizing ? "Resumindo…" : "Resumir com IA"}
+            </button>
             <button
               type="button"
               disabled={unreadInformativos.length === 0}
@@ -681,6 +711,15 @@ export default function TriageBoard({
             </button>
           </div>
         </div>
+        {aiSummary && (
+          <div className="mb-5 flex flex-col gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--surface-3)" }}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-[0.06em] text-mute">Resumo dos informativos</span>
+              <button type="button" onClick={() => setAiSummary(null)} className="btn min-h-8 px-2.5 py-1 text-xs">Fechar</button>
+            </div>
+            <p className="m-0 whitespace-pre-line leading-relaxed text-ink">{aiSummary}</p>
+          </div>
+        )}
         {informativos.length === 0 ? (
           <p className="m-0 text-mute">Nenhum informativo na janela.</p>
         ) : (

@@ -227,3 +227,37 @@ export async function deleteDraft(token: string, draftId: string): Promise<void>
   });
   if (!res.ok && res.status !== 404) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
+
+export async function summarizeInformativosWithAI(
+  items: { sender: string; subject: string; snippet: string }[],
+): Promise<string> {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key) throw new Error("ANTHROPIC_API_KEY não configurada");
+  if (items.length === 0) return "Nenhum informativo para resumir.";
+
+  const list = items
+    .slice(0, 30)
+    .map((m, idx) => `${idx + 1}. ${m.sender} — ${m.subject}${m.snippet ? ` (${m.snippet.slice(0, 120)})` : ""}`)
+    .join("\n");
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-haiku-5-5",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: `Resuma estes ${Math.min(items.length, 30)} e-mails informativos em português, de forma bem direta, em até 5 tópicos curtos (uma linha por tópico, começando com "• "). Agrupe assuntos parecidos.\n\n${list}`,
+        },
+      ],
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}`);
+  const j = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const text = j.content?.find((b) => b.type === "text")?.text?.trim();
+  if (!text) throw new Error("A IA não retornou um resumo.");
+  return text;
+}
