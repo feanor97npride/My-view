@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createCalendarEvent, deleteCalendarEvent } from "@/lib/calendar";
 import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
-import { archiveEmail, markEmailsRead, markEmailsUnread, unarchiveEmail } from "@/lib/gmail";
+import { createFollowupDraft, deleteDraft, archiveEmail, markEmailsRead, markEmailsUnread, unarchiveEmail } from "@/lib/gmail";
 import { getDefaultClickupList } from "@/lib/prefs";
 
 type Payload =
@@ -11,7 +11,9 @@ type Payload =
   | { action: "schedule"; title: string; description: string; startIso: string; endIso: string }
   | { action: "unschedule"; eventId: string }
   | { action: "task"; title: string; description: string; listId?: string }
-  | { action: "untask"; taskId: string };
+  | { action: "untask"; taskId: string }
+  | { action: "followup"; threadId: string; to: string; subject: string }
+  | { action: "unfollowup"; draftId: string };
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -67,6 +69,18 @@ export async function POST(req: Request) {
     }
     if (body.action === "untask" && typeof body.taskId === "string" && body.taskId) {
       await deleteClickupTask(body.taskId);
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "followup" && typeof body.threadId === "string" && body.threadId) {
+      const created = await createFollowupDraft(token, {
+        threadId: body.threadId,
+        to: body.to ?? "",
+        subject: body.subject ?? "(sem assunto)",
+      });
+      return NextResponse.json({ ok: true, draftId: created.id });
+    }
+    if (body.action === "unfollowup" && typeof body.draftId === "string" && body.draftId) {
+      await deleteDraft(token, body.draftId);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });

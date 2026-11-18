@@ -62,7 +62,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
     url: gmailThreadUrl(account, m.threadId),
   }));
   const waitingItems = Array.isArray(waiting)
-    ? waiting.map((w) => ({ threadId: w.threadId, to: w.to, subject: w.subject, dias: w.dias, url: gmailThreadUrl(account, w.threadId) }))
+    ? waiting.map((w) => ({ threadId: w.threadId, to: w.to, toAddress: w.toAddress, subject: w.subject, dias: w.dias, url: gmailThreadUrl(account, w.threadId) }))
     : null;
   const dateLine = `${now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "short", timeZone: tz }).replace(".", "")} · Gmail, últimos 7 dias`;
 

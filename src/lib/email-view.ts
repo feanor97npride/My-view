@@ -88,7 +88,7 @@ export type ThreadLike = {
   id: string;
   messages?: { internalDate: string; labelIds?: string[]; payload: { headers: { name: string; value: string }[] } }[];
 };
-export type Awaiting = { threadId: string; to: string; subject: string; sentAt: Date; dias: number };
+export type Awaiting = { threadId: string; to: string; toAddress: string; subject: string; sentAt: Date; dias: number };
 
 // Conversations whose last message is mine, sent minDays or more ago, and not only to myself.
 export function pickAwaiting(threads: ThreadLike[], myEmail: string, now: Date, minDays = AGUARDANDO_DIAS): Awaiting[] {
@@ -108,6 +108,7 @@ export function pickAwaiting(threads: ThreadLike[], myEmail: string, now: Date, 
     out.push({
       threadId: t.id,
       to: people.map((p) => p.name).join(", ") || "(sem destinatário visível)",
+      toAddress: people.map((p) => p.address).filter(Boolean).join(", "),
       subject: header("subject") || "(sem assunto)",
       sentAt,
       dias,

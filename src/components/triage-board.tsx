@@ -14,7 +14,7 @@ import {
   type TriItem,
 } from "@/lib/triage";
 
-export type Waiting = { threadId: string; to: string; subject: string; dias: number; url: string };
+export type Waiting = { threadId: string; to: string; toAddress: string; subject: string; dias: number; url: string };
 
 const fill = (c: string) => ({ background: `var(--k-${c})`, color: `var(--kt-${c})` });
 const label = (c: string) => CATEGORY_LABEL[c] ?? c;
@@ -69,6 +69,7 @@ export default function TriageBoard({
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ label: string; undo: () => void } | null>(null);
   const [sched, setSched] = useState<{ id: string; title: string; start: string; minutes: number } | null>(null);
+  const [drafted, setDrafted] = useState<Record<string, boolean>>({});
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -258,6 +259,33 @@ export default function TriageBoard({
         setItems((prev) => prev.map((x) => (idSet.has(x.id) ? { ...x, unread: true } : x)));
         setActionError(r.error);
       }
+    });
+  };
+
+  const followupWaiting = (w: Waiting) => {
+    if (drafted[w.threadId]) return;
+    setActionError(null);
+    setDrafted((prev) => ({ ...prev, [w.threadId]: true }));
+    void postAction<{ draftId?: string }>({
+      action: "followup",
+      threadId: w.threadId,
+      to: w.toAddress,
+      subject: w.subject,
+    }).then((r) => {
+      if (!r.ok) {
+        setDrafted((prev) => ({ ...prev, [w.threadId]: false }));
+        setActionError(r.error);
+        return;
+      }
+      const draftId = r.data.draftId;
+      showToast(`Rascunho de cobrança criado para ${w.to}`, () => {
+        setDrafted((prev) => ({ ...prev, [w.threadId]: false }));
+        if (draftId) {
+          void postAction({ action: "unfollowup", draftId }).then((u) => {
+            if (!u.ok) setActionError(u.error);
+          });
+        }
+      });
     });
   };
 
@@ -601,7 +629,17 @@ export default function TriageBoard({
                     <span className="block truncate font-semibold">{w.to}</span>
                     <span className="block truncate text-mute">há {plural(w.dias, "dia", "dias")} · {w.subject}</span>
                   </span>
-                  <ExtLink href={w.url} className="btn min-h-9 shrink-0 px-3 py-1.5 text-[13px] no-underline">Cobrar</ExtLink>
+                  {drafted[w.threadId] ? (
+                    <ExtLink href={w.url} className="btn min-h-9 shrink-0 px-3 py-1.5 text-[13px] no-underline">Abrir ↗</ExtLink>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => followupWaiting(w)}
+                      className="btn min-h-9 shrink-0 px-3 py-1.5 text-[13px]"
+                    >
+                      Cobrar
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -188,3 +188,42 @@ export async function markEmailsUnread(token: string, ids: string[]): Promise<vo
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids})`.catch(() => {});
 }
+
+export async function createFollowupDraft(
+  token: string,
+  input: { threadId: string; to: string; subject: string },
+): Promise<{ id: string }> {
+  const clean = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
+  const subject = /^re:/i.test(input.subject.trim()) ? clean(input.subject) : `Re: ${clean(input.subject)}`;
+  const lines = [
+    ...(input.to ? [`To: ${clean(input.to)}`] : []),
+    `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "",
+    "Olá,",
+    "",
+    "Passando para retomar este assunto e saber se há alguma novidade.",
+    "",
+    "Obrigado!",
+  ];
+  const raw = Buffer.from(lines.join("\r\n"), "utf8").toString("base64url");
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: { threadId: input.threadId, raw } }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = (await res.json()) as { id: string };
+  return { id: j.id };
+}
+
+export async function deleteDraft(token: string, draftId: string): Promise<void> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${encodeURIComponent(draftId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
