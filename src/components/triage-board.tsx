@@ -1,0 +1,425 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
+import {
+  FILAS,
+  agruparInformativos,
+  buildQueue,
+  maisBarulhento,
+  resumir,
+  senderInfo,
+  tituloResumo,
+  type Fila,
+  type TriItem,
+} from "@/lib/triage";
+
+export type Waiting = { threadId: string; to: string; subject: string; dias: number; url: string };
+
+const fill = (c: string) => ({ background: `var(--k-${c})`, color: `var(--kt-${c})` });
+const label = (c: string) => CATEGORY_LABEL[c] ?? c;
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+function Avatar({ name, cat, size = 40 }: { name: string; cat: string; size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex shrink-0 items-center justify-center rounded-full font-display font-bold"
+      style={{ width: size, height: size, fontSize: size / 2.6, ...fill(cat) }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded-md border border-line-strong px-1.5 py-0.5 text-[11px] font-medium text-mute">{children}</kbd>;
+}
+
+const ExtLink = ({ href, className, style, children }: { href: string; className?: string; style?: React.CSSProperties; children: React.ReactNode }) => (
+  <a href={href} target="_blank" rel="noopener noreferrer" className={className} style={style}>
+    {children}
+    <span className="sr-only"> (abre no Gmail, em nova aba)</span>
+  </a>
+);
+
+export default function TriageBoard({
+  items,
+  waiting,
+  waitingError,
+  dateLine,
+  awaitingDays,
+  initialFila,
+}: {
+  items: TriItem[];
+  waiting: Waiting[] | null; // null = could not be read
+  waitingError: string | null;
+  dateLine: string;
+  awaitingDays: number;
+  initialFila: Fila | null;
+}) {
+  const [filtro, setFiltro] = useState<Fila | null>(initialFila);
+  const [q, setQ] = useState("");
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [help, setHelp] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+
+  const visible = useMemo(() => (q.trim() ? filterEmails(items, { q }) : items), [items, q]);
+  const resumo = useMemo(() => resumir(items), [items]); // the header always describes the whole window
+  const queue = useMemo(() => buildQueue(visible, filtro), [visible, filtro]);
+  const focus = queue.find((i) => i.id === focusId) ?? queue[0] ?? null;
+  const idx = focus ? queue.indexOf(focus) : -1;
+  const aSeguir = queue.filter((i) => i !== focus).slice(0, 3);
+  const grupos = useMemo(() => agruparInformativos(visible), [visible]);
+  const barulhento = maisBarulhento(grupos);
+  const outros = grupos.filter((g) => g !== barulhento);
+  const informativos = visible.filter((i) => i.category === "informativo");
+
+  const count = (f: Fila) => (f === "aguardando" ? (waiting ? waiting.length : null) : (resumo.porCategoria[f] ?? 0));
+  const title = tituloResumo(resumo);
+  const done = resumo.importantesTotal ? resumo.importantesTriados / resumo.importantesTotal : 1;
+  const unreadIn = (c: string) => visible.filter((i) => i.category === c && i.unread);
+
+  const go = (delta: number) => {
+    if (queue.length === 0) return;
+    setFocusId(queue[(Math.max(idx, 0) + delta + queue.length) % queue.length].id);
+  };
+
+  // Listens on the screen container, not on window, and ignores typing in fields.
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const t = e.target as HTMLElement;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (t.matches("input, textarea, select, [contenteditable]")) {
+      if (e.key === "Escape") (t as HTMLElement).blur();
+      return;
+    }
+    const k = e.key.toLowerCase();
+    if (k === "j" || k === "arrowright") go(1);
+    else if (k === "k" || k === "arrowleft") go(-1);
+    else if (k === "/") {
+      e.preventDefault();
+      search.current?.focus();
+    } else if (k === "?") setHelp((h) => !h);
+    else if (k === "r" && focus) window.open(focus.url, "_blank", "noopener,noreferrer");
+    else if (/^[1-7]$/.test(k)) setFiltro((f) => (f === FILAS[Number(k) - 1] ? null : FILAS[Number(k) - 1]));
+    else return;
+    if (k !== "r") e.stopPropagation();
+  };
+
+  // Announces which e-mail is in focus for screen readers.
+  const [announce, setAnnounce] = useState("");
+  useEffect(() => {
+    setAnnounce(focus ? `Agora: ${senderInfo(focus.sender).nome}, ${focus.subject}` : "");
+  }, [focus]);
+
+  const card = "rounded-[28px] border border-line p-6";
+  const neutral = { background: "var(--card)" };
+
+  return (
+    <div ref={root} onKeyDown={onKeyDown} className="mx-auto flex max-w-[1120px] flex-col gap-[26px] p-4 md:px-12 md:pb-14 md:pt-10">
+      <p role="status" aria-live="polite" className="sr-only">{announce}</p>
+
+      {/* 1 · Cabeçalho */}
+      <header className="flex flex-wrap items-center justify-between gap-5">
+        <div className="min-w-0 flex-1 basis-[320px]">
+          <p className="text-sm capitalize text-mute">{dateLine}</p>
+          <h1 className="font-display text-[34px] font-bold leading-[1.05] tracking-tight md:text-[44px]">
+            {title.total} <span style={{ color: "var(--k-acao)" }}>{title.destaque}</span>
+          </h1>
+        </div>
+        <div className="flex w-full flex-wrap items-center gap-5 md:w-auto">
+          <label className="min-w-0 flex-1 md:w-64 md:flex-none">
+            <span className="sr-only">Buscar por remetente ou assunto</span>
+            <input
+              ref={search}
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar remetente ou assunto ( / )"
+              className="min-h-11 w-full rounded-2xl border border-line-strong bg-card px-4 text-base text-ink"
+            />
+          </label>
+          <div className="flex items-center gap-3">
+            <div
+              role="img"
+              aria-label={`${resumo.importantesTriados} de ${resumo.importantesTotal} importantes triados`}
+              className="flex h-[68px] w-[68px] shrink-0 items-center justify-center rounded-full"
+              style={{ background: `conic-gradient(var(--k-acao) ${done * 360}deg, var(--line) 0)` }}
+            >
+              <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-bg font-display text-sm font-bold tabular-nums">
+                {resumo.importantesTriados}/{resumo.importantesTotal}
+              </span>
+            </div>
+            <div className="text-sm leading-tight">
+              <div className="font-semibold">Importantes</div>
+              <div className="text-mute">{plural(resumo.importantes, "restante", "restantes")}</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* 2 · Faixa de filas */}
+      <nav aria-label="Filas por categoria" className="flex gap-2.5 overflow-x-auto pb-1 md:grid md:grid-cols-4 md:overflow-visible xl:grid-cols-7">
+        {FILAS.map((f, n) => {
+          const c = count(f);
+          const isFocus = focus?.category === f;
+          const active = filtro === f;
+          return (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setFiltro(active ? null : f)}
+              className={`flex min-h-[88px] min-w-[112px] flex-col items-start justify-between rounded-[20px] px-4 py-3 text-left md:min-w-0 ${f === "aguardando" ? "border-2 border-dashed border-line-strong" : "border-2 border-transparent"} ${c === 0 ? "opacity-60" : ""}`}
+              style={{
+                ...fill(f),
+                ...(isFocus || active ? { borderColor: "var(--ink)", borderStyle: "solid", borderWidth: 3 } : {}),
+              }}
+            >
+              <span className="font-display text-3xl font-bold leading-none tabular-nums">{c ?? "–"}</span>
+              <span className="text-[13px] font-semibold">
+                {label(f)} <span className="font-medium opacity-70">· {n + 1}</span>
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* 3 · Cartão em foco + Financeiro / Trabalho */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <section aria-label="E-mail em foco" className="relative min-w-0 lg:col-span-2">
+          {queue.length > 1 && (
+            <>
+              <div aria-hidden="true" className="absolute inset-x-2 -bottom-2 top-2 rounded-[28px]" style={{ background: "var(--surface-3)" }} />
+              <div aria-hidden="true" className="absolute inset-x-4 -bottom-4 top-4 rounded-[28px] border border-line" style={{ background: "var(--line)" }} />
+            </>
+          )}
+          <div className={`${card} relative flex flex-col gap-5`} style={neutral}>
+            {focus ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.08em] text-mute">Em foco</span>
+                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={fill(focus.category)}>{label(focus.category)}</span>
+                  </span>
+                  <span className="text-xs text-mute">
+                    {focus.when}
+                    {focus.unread ? " · não lido" : ""}
+                    {queue.length > 1 && ` · ${idx + 1} de ${queue.length}`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Avatar name={senderInfo(focus.sender).nome} cat={focus.category} size={48} />
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">{senderInfo(focus.sender).nome}</div>
+                    <div className="truncate text-sm text-mute">{senderInfo(focus.sender).dominio || senderInfo(focus.sender).email}</div>
+                  </div>
+                </div>
+                <h2 className="font-display text-2xl font-bold leading-tight md:text-[30px]">{focus.subject}</h2>
+                <p className="m-0 rounded-2xl p-4 text-[15px] text-ink" style={{ background: "var(--surface-3)" }}>
+                  {decodeEntities(focus.snippet) || "Sem prévia disponível."}
+                </p>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {[
+                    ["Arquivar", "A", {}],
+                    ["Pôr na agenda", "G", { background: "var(--k-agendamento)", color: "var(--kt-agendamento)", borderColor: "transparent" }],
+                    ["Virar tarefa", "T", { background: "var(--k-trabalho)", color: "var(--kt-trabalho)", borderColor: "transparent" }],
+                    ["Responder", "R", { background: "var(--k-acao)", color: "var(--kt-acao)", borderColor: "transparent" }],
+                  ].map(([name, key, style]) => (
+                    <ExtLink
+                      key={name as string}
+                      href={focus.url}
+                      style={style as React.CSSProperties}
+                      className="flex min-h-[84px] flex-col items-center justify-center gap-1 rounded-[18px] border border-line-strong text-center font-semibold text-ink no-underline hover:brightness-110"
+                    >
+                      <span>{name as string}</span>
+                      <span className="text-[11px] font-medium opacity-70">{key as string}</span>
+                    </ExtLink>
+                  ))}
+                </div>
+                <p className="m-0 text-xs text-mute">Nesta versão as ações abrem a conversa no Gmail. Arquivar, agenda e ClickUp diretos chegam na próxima etapa.</p>
+              </>
+            ) : q.trim() ? (
+              <div className="flex flex-col items-start gap-3">
+                <h2 className="font-display text-2xl font-bold">Nada encontrado</h2>
+                <p className="m-0 text-mute">Nenhum e-mail com “{q}”.</p>
+                <button type="button" className="btn" onClick={() => setQ("")}>Limpar busca</button>
+              </div>
+            ) : filtro ? (
+              <div className="flex flex-col items-start gap-3">
+                <h2 className="font-display text-2xl font-bold">{filtro === "aguardando" ? "Aguardando resposta" : `Nada em ${label(filtro)}`}</h2>
+                <p className="m-0 text-mute">
+                  {filtro === "aguardando" ? "Essas conversas aparecem no bloco abaixo, sem cartão em foco." : "Nenhum e-mail nesta fila."}
+                </p>
+                <button type="button" className="btn" onClick={() => setFiltro(null)}>Limpar filtro</button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-start gap-3">
+                <h2 className="font-display text-3xl font-bold">Tudo em dia</h2>
+                <p className="m-0 text-mute">Você leu todos os e-mails que pedem atenção. {plural(items.filter((i) => !i.unread).length, "e-mail lido", "e-mails lidos")} na janela.</p>
+                <a href="#leitura-leve" className="btn">Ir para a Leitura leve</a>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <div className="flex min-w-0 flex-col gap-5">
+          <section aria-label="Financeiro" className={`${card} flex flex-1 flex-col gap-2 border-0`} style={fill("financeiro")}>
+            <span className="text-[13px] font-bold uppercase tracking-[0.06em]">Financeiro · {resumo.porCategoria.financeiro ?? 0}</span>
+            {(() => {
+              const f = visible.filter((i) => i.category === "financeiro").sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt));
+              return f.length ? (
+                <>
+                  <span className="font-display text-xl font-bold leading-tight">{f[0].subject}</span>
+                  <span className="text-sm">{senderInfo(f[0].sender).nome} · {f[0].when}{f.length > 1 ? ` · +${f.length - 1}` : ""}</span>
+                  <button type="button" onClick={() => setFiltro("financeiro")} className="mt-auto min-h-11 rounded-2xl px-4 text-sm font-bold" style={{ background: "var(--kt-financeiro)", color: "var(--k-financeiro)" }}>
+                    Ver financeiro
+                  </button>
+                </>
+              ) : (
+                <span className="text-sm">Nenhuma cobrança por aqui.</span>
+              );
+            })()}
+          </section>
+
+          <section aria-label="Trabalho" className={`${card} flex flex-col gap-2 border-0`} style={fill("trabalho")}>
+            <span className="text-[13px] font-bold uppercase tracking-[0.06em]">Trabalho</span>
+            <span className="font-display text-4xl font-bold leading-none tabular-nums">{resumo.porCategoria.trabalho ?? 0}</span>
+            <span className="text-sm">{plural(new Set(visible.filter((i) => i.category === "trabalho").map((i) => senderInfo(i.sender).email)).size, "remetente", "remetentes")}</span>
+            <button type="button" onClick={() => setFiltro("trabalho")} className="mt-1 min-h-11 rounded-2xl px-4 text-sm font-bold" style={{ background: "var(--kt-trabalho)", color: "var(--k-trabalho)" }}>
+              Abrir mesa de trabalho
+            </button>
+          </section>
+        </div>
+      </div>
+
+      {/* 4 · A seguir + Aguardando / Pessoal */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <section aria-label="A seguir" className={`${card} min-w-0 lg:col-span-2`} style={neutral}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="font-display text-3xl font-bold tabular-nums" style={{ color: "var(--k-acao)" }}>{aSeguir.length}</span>
+              <div>
+                <h2 className="font-display text-xl font-bold">A seguir: precisa de você</h2>
+                <p className="m-0 text-sm text-mute">{filtro ? `Fila: ${label(filtro)}` : "Os próximos não lidos por prioridade"}</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => go(1)} disabled={queue.length < 2} className="btn min-h-11 disabled:opacity-50">Próximo →</button>
+          </div>
+          {aSeguir.length === 0 && <p className="m-0 text-mute">Nada na fila.</p>}
+          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+            {aSeguir.map((m) => (
+              <li key={m.id} className="flex items-stretch gap-3 rounded-2xl p-3" style={{ background: "var(--surface-3)" }}>
+                <span aria-hidden="true" className="w-1.5 shrink-0 rounded-full" style={{ background: `var(--k-${m.category})` }} />
+                <button type="button" onClick={() => setFocusId(m.id)} className="min-w-0 flex-1 bg-transparent p-0 text-left text-ink">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="truncate font-semibold">{senderInfo(m.sender).nome}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-mute">{m.when}</span>
+                  </span>
+                  <span className="block truncate text-sm text-mute">{m.subject}</span>
+                  <span className="sr-only">Colocar em foco</span>
+                </button>
+                <ExtLink href={m.url} className="btn hidden min-h-9 self-center px-3 py-1.5 text-[13px] no-underline sm:inline-flex">Responder</ExtLink>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <div className="flex min-w-0 flex-col gap-5">
+          <section aria-label="Aguardando resposta" className={`${card} flex flex-col gap-2 border-2 border-dashed border-line-strong`} style={neutral}>
+            <span className="text-[13px] font-bold uppercase tracking-[0.06em] text-mute">Aguardando resposta · {waiting ? waiting.length : "–"}</span>
+            {waitingError && <p className="m-0 text-sm text-mute">Não foi possível ler os enviados: {waitingError}</p>}
+            {waiting && waiting.length === 0 && <p className="m-0 text-sm text-mute">Ninguém te devendo resposta (prazo de {plural(awaitingDays, "dia", "dias")}).</p>}
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
+              {waiting?.slice(0, 3).map((w) => (
+                <li key={w.threadId} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 text-sm">
+                    <span className="block truncate font-semibold">{w.to}</span>
+                    <span className="block truncate text-mute">há {plural(w.dias, "dia", "dias")} · {w.subject}</span>
+                  </span>
+                  <ExtLink href={w.url} className="btn min-h-9 shrink-0 px-3 py-1.5 text-[13px] no-underline">Cobrar</ExtLink>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section aria-label="Pessoal" className={`${card} flex flex-col gap-1`} style={neutral}>
+            <span className="text-[13px] font-bold uppercase tracking-[0.06em] text-mute">Pessoal</span>
+            {unreadIn("pessoal").length === 0 ? (
+              <>
+                <span className="font-display text-4xl font-bold leading-none" style={{ color: "var(--k-pessoal)" }}>0</span>
+                <span className="text-sm text-mute">Nada pendente. Aproveite.</span>
+              </>
+            ) : (
+              <>
+                <span className="font-display text-4xl font-bold leading-none tabular-nums">{unreadIn("pessoal").length}</span>
+                <span className="truncate text-sm text-mute">Mais recente: {senderInfo(unreadIn("pessoal")[0].sender).nome}</span>
+              </>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {/* 5 · Leitura leve */}
+      <section id="leitura-leve" aria-label="Leitura leve" className="rounded-[28px] border border-line bg-card p-6" style={{ background: "var(--card)" }}>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-[22px] font-bold">Leitura leve</h2>
+            <p className="m-0 text-sm text-mute">{plural(informativos.length, "informativo", "informativos")}, sem decisão um a um</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled title="Disponível na próxima etapa" className="btn min-h-11 disabled:opacity-50">Resumir com IA</button>
+            <button type="button" disabled title="Disponível na próxima etapa (precisa de permissão de escrita no Gmail)" className="btn btn-primary min-h-11 disabled:opacity-50">
+              Marcar {informativos.length} como lidos
+            </button>
+          </div>
+        </div>
+        {informativos.length === 0 ? (
+          <p className="m-0 text-mute">Nenhum informativo na janela.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {barulhento && (
+              <article className="flex flex-col gap-2 rounded-[20px] p-5" style={{ background: "#f2f2fa", color: "#16172e" }}>
+                <span className="text-[13px] font-bold uppercase tracking-[0.06em]" style={{ color: "#4b4d78" }}>Mais barulhento · {barulhento.qtd}</span>
+                <span className="font-display text-xl font-bold">{barulhento.nome}</span>
+                <span className="text-sm" style={{ color: "#3a3c5c" }}>{barulhento.assuntos.join(" · ")}</span>
+                <ExtLink href={barulhento.url} className="mt-auto text-sm font-semibold" style={{ color: "#3730a3" }}>Abrir o mais recente</ExtLink>
+              </article>
+            )}
+            {outros.slice(0, barulhento ? 2 : 3).map((g) => (
+              <article key={g.email} className="flex flex-col gap-2 rounded-[20px] p-5" style={{ background: "var(--surface-3)" }}>
+                <span className="flex items-center gap-2.5">
+                  <Avatar name={g.nome} cat="informativo" size={34} />
+                  <span className="min-w-0 flex-1 truncate font-semibold">{g.nome}</span>
+                  <span className="text-xs text-mute">{g.qtd > 1 ? `${g.qtd} e-mails` : g.ultimo}</span>
+                </span>
+                <span className="line-clamp-2 text-sm text-mute">{g.linha}</span>
+                <ExtLink href={g.url} className="mt-auto text-sm font-semibold">Abrir</ExtLink>
+              </article>
+            ))}
+          </div>
+        )}
+        {outros.length > (barulhento ? 2 : 3) && (
+          <button type="button" onClick={() => setFiltro("informativo")} className="mt-4 min-h-11 bg-transparent p-0 text-sm font-semibold" style={{ color: "var(--link)" }}>
+            Ver todos os {grupos.length} remetentes
+          </button>
+        )}
+      </section>
+
+      {/* Atalhos */}
+      <div className="flex flex-wrap items-center gap-3 text-xs text-mute">
+        <button type="button" onClick={() => setHelp((h) => !h)} aria-expanded={help} className="btn min-h-9 px-3 py-1 text-[13px]">Atalhos ( ? )</button>
+        {help && (
+          <p className="m-0 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span><Kbd>J</Kbd> <Kbd>→</Kbd> próximo</span>
+            <span><Kbd>K</Kbd> <Kbd>←</Kbd> anterior</span>
+            <span><Kbd>1</Kbd>–<Kbd>7</Kbd> fila</span>
+            <span><Kbd>/</Kbd> buscar</span>
+            <span><Kbd>R</Kbd> abrir no Gmail</span>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}

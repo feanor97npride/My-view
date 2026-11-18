@@ -30,6 +30,16 @@
   --cat-acao: #6d28d9; --cat-financeiro: #047857; --cat-agendamento: #1d4ed8; --cat-trabalho: #b45309;
   --cat-pessoal: #be185d; --cat-aguardando: #0f766e; --cat-informativo: #64748b;
 
+  /* Triage screen: category fills and the text on them (from the spec, readable on both themes). */
+  --k-acao: #ff6b4a; --kt-acao: #1a0b07;
+  --k-financeiro: #ffc83d; --kt-financeiro: #231a00;
+  --k-agendamento: #4da3ff; --kt-agendamento: #04182e;
+  --k-trabalho: #9b7bff; --kt-trabalho: #160a3a;
+  --k-pessoal: #6ee7b7; --kt-pessoal: #052e1f;
+  --k-informativo: #e2e8f0; --kt-informativo: #1e293b;
+  --k-aguardando: var(--card); --kt-aguardando: var(--ink);
+  --surface-3: #eef0fa;
+
   color-scheme: light;
 }
 
@@ -61,6 +71,9 @@
   --s1: #818cf8; --s2: #fbbf24; --s3: #f472b6; --s4: #2dd4bf; --s5: #94a3b8; --s6: #60a5fa; --s7: #a78bfa;
   --cat-acao: #a78bfa; --cat-financeiro: #34d399; --cat-agendamento: #60a5fa; --cat-trabalho: #fbbf24;
   --cat-pessoal: #f472b6; --cat-aguardando: #2dd4bf; --cat-informativo: #94a3b8;
+
+  --k-informativo: #2b2d5a; --kt-informativo: #f2f2fa;
+  --surface-3: #22244a;
 
   color-scheme: dark;
 }
