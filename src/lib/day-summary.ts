@@ -2,6 +2,13 @@
 // Unknown data (a source that failed) is passed as null and simply left out of the text.
 
 export const ALERTA_REUNIAO_MIN = 30;
+export const JANELAS_REUNIAO = [5, 10, 15, 30, 60];
+
+// Anything that is not one of the allowed windows falls back to the default.
+export function normalizeWindow(v: unknown): number {
+  const n = Number(v);
+  return JANELAS_REUNIAO.includes(n) ? n : ALERTA_REUNIAO_MIN;
+}
 const AGUARDANDO_DIAS = 2; // keep equal to AGUARDANDO_DIAS in email-view.ts (this file has no imports)
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;

@@ -5,7 +5,8 @@ import Reconnect from "@/components/reconnect";
 import { listCalendars, pickCalendars } from "@/lib/calendar";
 import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL } from "@/lib/email-view";
-import { getEmailRules, getSelectedCalendars, setEmailRules, setSelectedCalendars } from "@/lib/prefs";
+import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
+import { getEmailRules, getMeetingWindow, getSelectedCalendars, setEmailRules, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -18,6 +19,15 @@ async function save(formData: FormData) {
   await setSelectedCalendars(ids);
   revalidatePath("/", "layout");
   redirect("/configuracoes?salvo=1");
+}
+
+async function saveWindow(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  await setMeetingWindow(normalizeWindow(formData.get("janela")));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?aviso=ok");
 }
 
 async function addRule(formData: FormData) {
@@ -55,7 +65,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -66,10 +76,11 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules] = await Promise.all([
+  const [all, selected, rules, windowMin] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
+    getMeetingWindow().catch(() => 30),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
@@ -106,6 +117,25 @@ export default async function Configuracoes({
         <div>
           <button type="submit" className="btn btn-primary">Salvar</button>
         </div>
+      </form>
+
+      <form action={saveWindow} className="card flex flex-wrap items-end gap-3">
+        <div className="w-full">
+          <h2 className="font-display text-xl font-semibold">Aviso de reunião</h2>
+          <p className="text-sm text-mute">Quanto tempo antes de uma reunião o aviso aparece (em Hoje e na faixa das outras telas).</p>
+        </div>
+        <label className="flex flex-col gap-1 text-sm text-mute">
+          Avisar com antecedência de
+          <select name="janela" defaultValue={String(windowMin)} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+            {JANELAS_REUNIAO.map((m) => (
+              <option key={m} value={m}>{m} minutos</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="btn btn-primary min-h-11">Salvar aviso</button>
+        {params.aviso && (
+          <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Aviso salvo. A faixa das outras telas pode levar até 1 minuto para refletir.</p>
+        )}
       </form>
 
       <section className="card flex flex-col gap-4">

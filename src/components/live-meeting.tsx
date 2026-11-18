@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { meetingStatus, type MeetingEvent } from "@/lib/day-summary";
 
 // Re-evaluates in the browser every 30 s, so the countdown keeps moving without asking the server again.
-export default function LiveMeeting({ events, serverNow }: { events: MeetingEvent[]; serverNow: string }) {
+export default function LiveMeeting({ events, serverNow, windowMin }: { events: MeetingEvent[]; serverNow: string; windowMin?: number }) {
   // First render uses the server's clock, so server and browser HTML match.
   const [now, setNow] = useState(() => new Date(serverNow));
   useEffect(() => {
@@ -12,7 +12,7 @@ export default function LiveMeeting({ events, serverNow }: { events: MeetingEven
     return () => clearInterval(id);
   }, []);
 
-  const s = meetingStatus(events, now);
+  const s = meetingStatus(events, now, windowMin);
   const min = (n: number) => `${n} min`;
 
   return (

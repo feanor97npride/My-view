@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types --no-warnings scripts/test-day-summary.ts
 import assert from "node:assert/strict";
-import { meetingStatus, staticAlerts, summarize } from "../src/lib/day-summary.ts";
+import { meetingStatus, normalizeWindow, staticAlerts, summarize } from "../src/lib/day-summary.ts";
 
 // summarize
 assert.equal(
@@ -64,5 +64,13 @@ assert.equal(meetingStatus([ev("late", 25, 80), ev("early", 5, 50)], now)?.event
 assert.equal(meetingStatus([ev("next", 5, 60), ev("current", -30, 10)], now)?.event.id, "current"); // in progress wins
 assert.equal(meetingStatus([ev("a", 45, 90)], now, 60)?.kind, "soon"); // custom window
 assert.equal(meetingStatus([{ id: "bad", title: "bad", start: "nope", end: "nope" }], now), null); // invalid dates ignored
+
+// normalizeWindow
+assert.equal(normalizeWindow(15), 15);
+assert.equal(normalizeWindow("10"), 10);
+assert.equal(normalizeWindow(7), 30);
+assert.equal(normalizeWindow(null), 30);
+assert.equal(normalizeWindow("abc"), 30);
+assert.equal(normalizeWindow(undefined), 30);
 
 console.log("day-summary: ok");

@@ -2,7 +2,7 @@ import { auth, signOut } from "@/auth";
 import { upcomingTimed } from "@/lib/calendar";
 import { urgentTasksCount } from "@/lib/clickup";
 import { unreadActionCount } from "@/lib/gmail";
-import { getSelectedCalendars } from "@/lib/prefs";
+import { getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
 import MeetingBanner from "@/components/meeting-banner";
 import NavLinks from "@/components/nav-links";
 import ThemeToggle from "@/components/theme-toggle";
@@ -39,6 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = session?.user?.name ?? "Usuário";
   // badge is optional: a database failure just hides it
   const [mailCount, taskCount] = await Promise.all([unreadActionCount().catch(() => 0), urgentTasksCount().catch(() => 0)]);
+  const windowMin = await getMeetingWindow().catch(() => 30);
   const selected = await getSelectedCalendars().catch(() => null);
   const meetings = session?.accessToken ? await upcomingTimed(session.accessToken, selected).catch(() => []) : [];
   const badges: Record<string, number> = { "/": taskCount, "/emails": mailCount };
@@ -73,7 +74,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <div className="min-w-0 flex-1 pb-24 md:pb-0">
-        <MeetingBanner events={meetings} serverNow={new Date().toISOString()} />
+        <MeetingBanner events={meetings} serverNow={new Date().toISOString()} windowMin={windowMin} />
         <div id="conteudo" tabIndex={-1} className="outline-none">
           {children}
         </div>

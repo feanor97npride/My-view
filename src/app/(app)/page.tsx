@@ -7,7 +7,7 @@ import { openTasks, type Task } from "@/lib/clickup";
 import { staticAlerts, summarize } from "@/lib/day-summary";
 import { gmailThreadUrl } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
-import { getSelectedCalendars } from "@/lib/prefs";
+import { getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
 
 const KPI_ICONS = {
   agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
@@ -53,6 +53,7 @@ function TaskRow({ t }: { t: Task }) {
 export default async function Home() {
   const session = await auth();
   const selected = await getSelectedCalendars().catch(() => null);
+  const windowMin = await getMeetingWindow().catch(() => 30);
   const today = session?.accessToken ? await timeline(session.accessToken, new Date(), 1, selected) : null;
   // shortcut: a ClickUp or Gmail failure shows a note instead of breaking the rest of the page
   const tasks = await openTasks().catch((e: Error) => e);
@@ -125,7 +126,7 @@ export default async function Home() {
         </div>
         {summary && <p className="m-0">{summary}</p>}
         <div className="flex flex-col gap-1 empty:hidden">
-          <LiveMeeting events={timed} serverNow={now.toISOString()} />
+          <LiveMeeting events={timed} serverNow={now.toISOString()} windowMin={windowMin} />
           {alerts.map((a) => (
             <Link key={a.id} href={a.href} className="flex flex-wrap items-center gap-2.5 rounded-xl px-3 py-2 text-ink no-underline hover:bg-primary-soft">
               <span className={`chip chip-${a.tone}`}>{a.label}</span>
