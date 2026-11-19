@@ -4,6 +4,7 @@ import DayPlan from "@/components/day-plan";
 import DayRing from "@/components/day-ring";
 import LiveMeeting from "@/components/live-meeting";
 import Reconnect from "@/components/reconnect";
+import RefreshButton from "@/components/refresh-button";
 import TodayTasks from "@/components/today-tasks";
 import { busyHours, timeline } from "@/lib/calendar";
 import { cachedListStatuses, openTasks } from "@/lib/clickup";
@@ -174,8 +175,8 @@ export default async function Home() {
         <div className="card bento-card flex flex-col justify-between gap-4 lg:col-span-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="m-0 text-xs font-medium capitalize text-mute">{dateLabel}</p>
-            <span className="text-xs text-mute">
-              Atualizado às {fmt(now)} · <Link href="/">Atualizar</Link>
+            <span className="inline-flex items-center gap-1.5 text-xs text-mute">
+              Atualizado às {fmt(now)} · <RefreshButton />
             </span>
           </div>
 

@@ -82,7 +82,7 @@ export default function IndicadoresView({
                 role="tab"
                 aria-selected={active}
                 onClick={() => setTab(id)}
-                className={`cursor-pointer rounded-lg px-3.5 py-1.5 transition-colors ${
+                className={`spring-btn cursor-pointer rounded-lg px-3.5 py-1.5 transition-colors ${
                   active ? "bg-primary text-[var(--on-primary)] font-semibold" : "text-mute hover:text-ink"
                 }`}
               >
@@ -94,8 +94,8 @@ export default function IndicadoresView({
       </header>
 
       {/* Bento Top: Anel de Saúde + 4 KPIs compactos */}
-      <section aria-label="Resumo" className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="card flex items-center gap-5 lg:col-span-5">
+      <section aria-label="Resumo" className="spring-card spring-d1 grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="card bento-card flex items-center gap-5 lg:col-span-5">
           {tasksError ? (
             <p className="text-sm text-mute">ClickUp indisponível: {tasksError}</p>
           ) : (
@@ -127,12 +127,12 @@ export default function IndicadoresView({
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-7">
-          <div className="card flex flex-col justify-between p-4">
+          <div className="card bento-card flex flex-col justify-between p-4">
             <span className="text-xs text-mute">Abertas</span>
             <span className="my-2 font-display text-3xl font-bold tabular-nums">{tasksError ? "–" : totalOpen}</span>
             <span className="text-xs text-mute">ClickUp ativo</span>
           </div>
-          <div className="card flex flex-col justify-between p-4">
+          <div className="card bento-card flex flex-col justify-between p-4">
             <span className="text-xs text-mute">Atrasadas</span>
             <span
               className="my-2 font-display text-3xl font-bold tabular-nums"
@@ -144,7 +144,7 @@ export default function IndicadoresView({
               {overdue > 0 ? "Prioridade alta" : "Nenhuma atrasada"}
             </span>
           </div>
-          <div className="card flex flex-col justify-between p-4">
+          <div className="card bento-card flex flex-col justify-between p-4">
             <span className="text-xs text-mute">Concluídas (14d)</span>
             <span className="my-2 font-display text-3xl font-bold tabular-nums" style={{ color: "var(--trend)" }}>
               {doneError ? "–" : doneCount}
@@ -153,7 +153,7 @@ export default function IndicadoresView({
               {doneError ? "Indisponível" : `${(doneCount / 14).toFixed(1).replace(".", ",")} por dia`}
             </span>
           </div>
-          <div className="card flex flex-col justify-between p-4">
+          <div className="card bento-card flex flex-col justify-between p-4">
             <span className="text-xs text-mute">E-mails ação</span>
             <span className="my-2 font-display text-3xl font-bold tabular-nums text-primary">
               {mailError ? "–" : acaoMail}
@@ -166,7 +166,7 @@ export default function IndicadoresView({
       {/* Bloco Tarefas: Entregas diárias (7d/14d) + Onde estão as tarefas */}
       {tab !== "emails" && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <section className="card flex flex-col gap-4 lg:col-span-8">
+          <section className="card bento-card flex flex-col gap-4 lg:col-span-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-lg font-semibold">Entregas diárias</h2>
@@ -238,7 +238,7 @@ export default function IndicadoresView({
             )}
           </section>
 
-          <section className="card flex flex-col gap-4 lg:col-span-4">
+          <section className="card bento-card flex flex-col gap-4 lg:col-span-4">
             <div>
               <h2 className="font-display text-lg font-semibold">Onde estão as tarefas</h2>
               <p className="text-xs text-mute">Por listas e status do ClickUp</p>
@@ -288,7 +288,7 @@ export default function IndicadoresView({
 
       {/* Bloco E-mails: Barra proporcional única + grade por categoria */}
       {tab !== "tarefas" && (
-        <section className="card space-y-4">
+        <section className="card bento-card space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="font-display text-lg font-semibold">Mapa de E-mails (últimos 7 dias)</h2>

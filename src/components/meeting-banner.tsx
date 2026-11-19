@@ -8,7 +8,7 @@ import type { MeetingEvent } from "@/lib/day-summary";
 export default function MeetingBanner({ events, serverNow, windowMin }: { events: MeetingEvent[]; serverNow: string; windowMin: number }) {
   if (usePathname() === "/") return null;
   return (
-    <div className="border-b border-line bg-card px-4 py-1 md:px-10">
+    <div className="border-b border-line bg-card px-4 py-1 has-[>[role=status]:empty]:hidden md:px-10">
       <LiveMeeting events={events} serverNow={serverNow} windowMin={windowMin} />
     </div>
   );

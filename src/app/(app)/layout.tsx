@@ -3,6 +3,7 @@ import { upcomingTimed } from "@/lib/calendar";
 import { urgentTasksCount } from "@/lib/clickup";
 import { unreadActionCount } from "@/lib/gmail";
 import { getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
+import CommandPalette from "@/components/command-palette";
 import MeetingBanner from "@/components/meeting-banner";
 import NavLinks from "@/components/nav-links";
 import ThemeToggle from "@/components/theme-toggle";
@@ -55,6 +56,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <aside className="hidden w-[248px] shrink-0 flex-col gap-7 border-r border-line bg-card p-5 md:flex">
         <Brand />
         <NavLinks variant="side" badges={badges} />
+        <p className="m-0 flex items-center justify-between rounded-xl border border-line bg-bg px-3 py-2 text-xs text-mute">
+          <span>Busca rápida</span>
+          <kbd className="rounded border border-line-strong bg-card px-1.5 py-0.5 text-[10px] font-semibold">⌘K</kbd>
+        </p>
         <div className="mt-auto flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft font-bold text-primary-ink" aria-hidden="true">
             {name.charAt(0).toUpperCase()}
@@ -80,6 +85,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
       <NavLinks variant="bottom" badges={badges} />
+      <CommandPalette />
     </div>
   );
 }

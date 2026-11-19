@@ -102,6 +102,9 @@ async function removeRule(formData: FormData) {
 
 export const metadata = { title: "Configurações" };
 
+import { BentoCard, SectionHeader } from "@/components/ui";
+import ConfigTabs from "./config-tabs";
+
 const RULE_MESSAGE: Record<string, [string, string]> = {
   ok: ["chip-green", "Regra salva. Vale para os e-mails da lista na próxima abertura."],
   removida: ["chip-green", "Regra removida."],
@@ -136,155 +139,129 @@ export default async function Configuracoes({
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
 
-  return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-4 md:p-10">
-      <header>
-        <p className="text-sm text-mute">Preferências</p>
-        <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">Configurações</h1>
-      </header>
+  const initialTab =
+    params.prazo || params.regra ? "emails" : params.lista || params.atalhos ? "clickup" : "agenda";
 
-      <form action={save} className="card flex flex-col gap-4">
-        <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0">
-          <legend className="mb-1 font-display text-xl font-semibold">Calendários exibidos</legend>
-          <p className="mb-2 text-sm text-mute">Vale para as telas Hoje e Semana. Marque ao menos um.</p>
-          {all instanceof Error && <p className="text-sm text-mute">Agenda indisponível: {all.message}</p>}
-          {Array.isArray(all) &&
-            all.map((c) => (
-              <label key={c.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 hover:bg-primary-soft">
-                <input type="checkbox" name="cal" value={c.id} defaultChecked={shown.has(c.id)} className="h-5 w-5 accent-[var(--primary)]" />
-                <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
-                {c.primary && <span className="chip chip-slate">Principal</span>}
-              </label>
-            ))}
-        </fieldset>
+  const toastMessage =
+    params.salvo ? "Calendários salvos."
+    : params.aviso ? "Aviso de reunião salvo."
+    : params.plano === "ok" ? "Plano do dia salvo."
+    : params.prazo ? "Prazo de aguardando resposta salvo."
+    : params.regra === "ok" ? "Regra de e-mail salva."
+    : params.regra === "removida" ? "Regra removida."
+    : params.lista ? "Lista padrão do ClickUp salva."
+    : params.atalhos ? "Preferência de atalhos salva."
+    : null;
 
-        {params.erro === "vazio" && (
-          <p role="alert" className="chip chip-red m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Marque ao menos um calendário.</p>
-        )}
-        {params.salvo && (
-          <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Preferências salvas.</p>
-        )}
+  const agendaSection = (
+    <>
+      <BentoCard as="div">
+        <form action={save} className="flex flex-col gap-4">
+          <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0">
+            <legend className="mb-1 font-display text-xl font-semibold">Calendários exibidos</legend>
+            <p className="mb-2 text-sm text-mute">Vale para as telas Hoje e Semana. Marque ao menos um.</p>
+            {all instanceof Error && <p className="text-sm text-mute">Agenda indisponível: {all.message}</p>}
+            {Array.isArray(all) &&
+              all.map((c) => (
+                <label key={c.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-2 hover:bg-primary-soft">
+                  <input type="checkbox" name="cal" value={c.id} defaultChecked={shown.has(c.id)} className="h-5 w-5 accent-[var(--primary)]" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
+                  {c.primary && <span className="chip chip-slate">Principal</span>}
+                </label>
+              ))}
+          </fieldset>
 
-        <div>
-          <button type="submit" className="btn btn-primary">Salvar</button>
-        </div>
-      </form>
+          {params.erro === "vazio" && (
+            <p role="alert" className="chip chip-red m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Marque ao menos um calendário.</p>
+          )}
 
-      <form action={saveWindow} className="card flex flex-wrap items-end gap-3">
-        <div className="w-full">
-          <h2 className="font-display text-xl font-semibold">Aviso de reunião</h2>
-          <p className="text-sm text-mute">Quanto tempo antes de uma reunião o aviso aparece (em Hoje e na faixa das outras telas).</p>
-        </div>
-        <label className="flex flex-col gap-1 text-sm text-mute">
-          Avisar com antecedência de
-          <select name="janela" defaultValue={String(windowMin)} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
-            {JANELAS_REUNIAO.map((m) => (
-              <option key={m} value={m}>{m} minutos</option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="btn btn-primary min-h-11">Salvar aviso</button>
-        {params.aviso && (
-          <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Aviso salvo. A faixa das outras telas pode levar até 1 minuto para refletir.</p>
-        )}
-      </form>
+          <div>
+            <button type="submit" className="btn btn-primary spring-btn">Salvar calendários</button>
+          </div>
+        </form>
+      </BentoCard>
 
-      <form action={saveAwaitingDays} className="card flex flex-wrap items-end gap-3">
-        <div className="w-full">
-          <h2 className="font-display text-xl font-semibold">Aguardando resposta</h2>
-          <p className="text-sm text-mute">Depois de quantos dias sem resposta uma conversa enviada por você entra na lista e no alerta de Hoje.</p>
-        </div>
-        <label className="flex flex-col gap-1 text-sm text-mute">
-          Prazo
-          <select name="prazo" defaultValue={String(awaitingDays)} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
-            {PRAZOS_AGUARDANDO.map((d) => (
-              <option key={d} value={d}>{d} {d === 1 ? "dia" : "dias"}</option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="btn btn-primary min-h-11">Salvar prazo</button>
-        {params.prazo && (
-          <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Prazo salvo.</p>
-        )}
-      </form>
-
-      <form action={saveClickupList} className="card flex flex-wrap items-end gap-3">
-        <div className="w-full">
-          <h2 className="font-display text-xl font-semibold">ClickUp</h2>
-          <p className="text-sm text-mute">Lista padrão ao transformar um e-mail em tarefa na tela de E-mails.</p>
-        </div>
-        <label className="flex flex-col gap-1 text-sm text-mute">
-          Lista padrão
-          <select name="lista" defaultValue={clickupList} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
-            {CLICKUP_LISTS.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="btn btn-primary min-h-11">Salvar lista</button>
-        {params.lista && (
-          <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Lista padrão salva.</p>
-        )}
-      </form>
-
-      <form action={saveShortcuts} className="card flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold">Atalhos de teclado</h2>
-          <p className="text-sm text-mute">Teclas rápidas (A, G, T, J, K, U, /, 1–7) na mesa de triagem de E-mails.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium">
-            <input type="checkbox" name="atalhos" value="1" defaultChecked={shortcutsEnabled} className="h-5 w-5 accent-[var(--primary)]" />
-            Ativar atalhos
+      <BentoCard as="div">
+        <form action={saveWindow} className="flex flex-wrap items-end gap-3">
+          <SectionHeader
+            className="w-full"
+            title="Aviso de reunião"
+            subtitle="Quanto tempo antes de uma reunião o aviso aparece (em Hoje e na faixa das outras telas)."
+          />
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Avisar com antecedência de
+            <select name="janela" defaultValue={String(windowMin)} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+              {JANELAS_REUNIAO.map((m) => (
+                <option key={m} value={m}>{m} minutos</option>
+              ))}
+            </select>
           </label>
-          <button type="submit" className="btn btn-primary min-h-11">Salvar</button>
-        </div>
-        {params.atalhos && (
-          <p role="status" className="chip chip-green m-0 w-full whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Preferência de atalhos salva.</p>
-        )}
-      </form>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar aviso</button>
+        </form>
+      </BentoCard>
 
-      <form action={savePlan} className="card flex flex-col gap-4">
-        <div>
-          <h2 className="font-display text-xl font-semibold">Plano do dia</h2>
-          <p className="text-sm text-mute">Expediente usado para sugerir blocos na agenda e limite de atrasadas por dia ao replanejar.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label className="flex flex-col gap-1 text-xs text-mute">
-            Início do expediente
-            <input type="time" name="inicio" required defaultValue={planPrefs.start} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-mute">
-            Fim do expediente
-            <input type="time" name="fim" required defaultValue={planPrefs.end} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-mute">
-            Minutos por tarefa
-            <input type="number" name="minutos" min={15} max={240} step={5} defaultValue={planPrefs.taskMin} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-mute">
-            Atrasadas por dia
-            <input type="number" name="porDia" min={1} max={10} defaultValue={planPrefs.perDay} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
-          </label>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" className="btn btn-primary min-h-11">Salvar</button>
-          {params.plano === "ok" && <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Plano do dia salvo.</p>}
-          {params.plano === "horario" && <p role="alert" className="chip chip-red m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">O fim do expediente precisa ser depois do início.</p>}
-        </div>
-      </form>
+      <BentoCard as="div">
+        <form action={savePlan} className="flex flex-col gap-4">
+          <SectionHeader
+            title="Plano do dia"
+            subtitle="Expediente usado para sugerir blocos na agenda e limite de atrasadas por dia ao replanejar."
+          />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <label className="flex flex-col gap-1 text-xs text-mute">
+              Início do expediente
+              <input type="time" name="inicio" required defaultValue={planPrefs.start} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-mute">
+              Fim do expediente
+              <input type="time" name="fim" required defaultValue={planPrefs.end} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-mute">
+              Minutos por tarefa
+              <input type="number" name="minutos" min={15} max={240} step={5} defaultValue={planPrefs.taskMin} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-mute">
+              Atrasadas por dia
+              <input type="number" name="porDia" min={1} max={10} defaultValue={planPrefs.perDay} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar plano</button>
+            {params.plano === "horario" && <p role="alert" className="chip chip-red m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">O fim do expediente precisa ser depois do início.</p>}
+          </div>
+        </form>
+      </BentoCard>
+    </>
+  );
 
-      <section className="card flex flex-col gap-4">
-        <div>
-          <h2 className="font-display text-xl font-semibold">Regras de e-mail</h2>
-          <p className="text-sm text-mute">
-            Fixe a categoria de um remetente. Um domínio (empresa.com) também vale para os subdomínios. Suas regras vencem as
-            automáticas e a IA, e valem para os e-mails da lista de E-mails.
-          </p>
-        </div>
+  const emailsSection = (
+    <>
+      <BentoCard as="div">
+        <form action={saveAwaitingDays} className="flex flex-wrap items-end gap-3">
+          <SectionHeader
+            className="w-full"
+            title="Aguardando resposta"
+            subtitle="Depois de quantos dias sem resposta uma conversa enviada por você entra na lista e no alerta de Hoje."
+          />
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Prazo
+            <select name="prazo" defaultValue={String(awaitingDays)} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+              {PRAZOS_AGUARDANDO.map((d) => (
+                <option key={d} value={d}>{d} {d === 1 ? "dia" : "dias"}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar prazo</button>
+        </form>
+      </BentoCard>
 
-        {ruleMsg && (
-          <p role={params.regra === "invalida" || params.regra === "cheia" ? "alert" : "status"} className={`chip ${ruleMsg[0]} m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm`}>
+      <BentoCard className="flex flex-col gap-4">
+        <SectionHeader
+          title="Regras de e-mail"
+          subtitle="Fixe a categoria de um remetente ou domínio (empresa.com). Suas regras vencem as automáticas e a IA."
+        />
+
+        {ruleMsg && (params.regra === "invalida" || params.regra === "cheia") && (
+          <p role="alert" className={`chip ${ruleMsg[0]} m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm`}>
             {ruleMsg[1]}
           </p>
         )}
@@ -297,7 +274,7 @@ export default async function Configuracoes({
               <span className={`chip ${CATEGORY_CHIP[r.category]}`}>{CATEGORY_LABEL[r.category]}</span>
               <form action={removeRule}>
                 <input type="hidden" name="match" value={r.match} />
-                <button type="submit" className="btn px-3 py-1.5 text-[13px]" aria-label={`Remover a regra de ${r.match}`}>Remover</button>
+                <button type="submit" className="btn spring-btn px-3 py-1.5 text-[13px]" aria-label={`Remover a regra de ${r.match}`}>Remover</button>
               </form>
             </li>
           ))}
@@ -322,9 +299,65 @@ export default async function Configuracoes({
               ))}
             </select>
           </label>
-          <button type="submit" className="btn btn-primary min-h-11">Adicionar regra</button>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Adicionar regra</button>
         </form>
-      </section>
+      </BentoCard>
+    </>
+  );
+
+  const clickupSection = (
+    <>
+      <BentoCard as="div">
+        <form action={saveClickupList} className="flex flex-wrap items-end gap-3">
+          <SectionHeader
+            className="w-full"
+            title="ClickUp"
+            subtitle="Lista padrão ao transformar um e-mail em tarefa na tela de E-mails."
+          />
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Lista padrão
+            <select name="lista" defaultValue={clickupList} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+              {CLICKUP_LISTS.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar lista</button>
+        </form>
+      </BentoCard>
+
+      <BentoCard as="div">
+        <form action={saveShortcuts} className="flex flex-wrap items-center justify-between gap-3">
+          <SectionHeader
+            title="Atalhos de teclado"
+            subtitle="Teclas rápidas (A, G, T, J, K, U, /, 1–7) na mesa de triagem de E-mails."
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium">
+              <input type="checkbox" name="atalhos" value="1" defaultChecked={shortcutsEnabled} className="h-5 w-5 accent-[var(--primary)]" />
+              Ativar atalhos
+            </label>
+            <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar</button>
+          </div>
+        </form>
+      </BentoCard>
+    </>
+  );
+
+  return (
+    <main className="mx-auto flex max-w-4xl flex-col gap-5 p-4 md:p-10">
+      <header>
+        <p className="text-sm text-mute">Preferências</p>
+        <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">Configurações</h1>
+      </header>
+
+      <ConfigTabs
+        initialTab={initialTab}
+        toastMessage={toastMessage}
+        agenda={agendaSection}
+        emails={emailsSection}
+        clickup={clickupSection}
+      />
     </main>
   );
 }
