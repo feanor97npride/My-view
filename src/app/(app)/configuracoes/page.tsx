@@ -8,7 +8,7 @@ import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs } from "@/lib/task-dates";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getSelectedCalendars, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getSelectedCalendars, getUserClickupToken, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setSelectedCalendars, setUserClickupToken } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -48,6 +48,15 @@ async function saveClickupList(formData: FormData) {
   await setDefaultClickupList(normalizeClickupList(formData.get("lista")));
   revalidatePath("/", "layout");
   redirect("/configuracoes?lista=ok");
+}
+
+async function saveClickupToken(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  await setUserClickupToken(String(formData.get("token") ?? ""));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?token=ok");
 }
 
 async function saveShortcuts(formData: FormData) {
@@ -115,7 +124,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string; atalhos?: string; plano?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string; token?: string; atalhos?: string; plano?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -126,13 +135,14 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, windowMin, awaitingDays, clickupList, shortcutsEnabled, planPrefs] = await Promise.all([
+  const [all, selected, rules, windowMin, awaitingDays, clickupList, clickupToken, shortcutsEnabled, planPrefs] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
     getMeetingWindow().catch(() => 30),
     getAwaitingDays().catch(() => 2),
     getDefaultClickupList().catch(() => CLICKUP_LISTS[0].id),
+    getUserClickupToken().catch(() => null),
     getKeyboardShortcutsEnabled().catch(() => true),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
   ]);
@@ -140,7 +150,7 @@ export default async function Configuracoes({
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
 
   const initialTab =
-    params.prazo || params.regra ? "emails" : params.lista || params.atalhos ? "clickup" : "agenda";
+    params.prazo || params.regra ? "emails" : params.lista || params.token || params.atalhos ? "clickup" : "agenda";
 
   const toastMessage =
     params.salvo ? "Calendários salvos."
@@ -150,6 +160,7 @@ export default async function Configuracoes({
     : params.regra === "ok" ? "Regra de e-mail salva."
     : params.regra === "removida" ? "Regra removida."
     : params.lista ? "Lista padrão do ClickUp salva."
+    : params.token ? "Token do ClickUp desta conta salvo."
     : params.atalhos ? "Preferência de atalhos salva."
     : null;
 
@@ -323,6 +334,26 @@ export default async function Configuracoes({
             </select>
           </label>
           <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar lista</button>
+        </form>
+      </BentoCard>
+
+      <BentoCard as="div">
+        <form action={saveClickupToken} className="flex flex-wrap items-end gap-3">
+          <SectionHeader
+            className="w-full"
+            title="Token do ClickUp (desta conta)"
+            subtitle="Permite usar um workspace ClickUp separado para esta conta Google. Deixe em branco para desativar."
+          />
+          <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-sm text-mute">
+            Token pessoal (pk_...)
+            <input
+              type="password"
+              name="token"
+              placeholder={clickupToken ? "•••••••• (token configurado)" : "pk_..."}
+              className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink"
+            />
+          </label>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar token</button>
         </form>
       </BentoCard>
 

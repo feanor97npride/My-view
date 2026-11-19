@@ -1,8 +1,15 @@
-// Only the owner's verified Google account may sign in.
+// Verified Google accounts allowed to sign in.
+// Supports a single address, a comma/space-separated list, or "*" for any verified Google account.
 export function isAllowedEmail(
   profile: { email?: string | null; email_verified?: boolean | null } | null | undefined,
   allowed: string | undefined,
 ): boolean {
-  if (!profile?.email || !allowed) return false;
-  return profile.email_verified === true && profile.email.toLowerCase() === allowed.trim().toLowerCase();
+  if (!profile?.email || profile.email_verified !== true || !allowed) return false;
+  const list = allowed
+    .split(/[\s,;]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (list.length === 0) return false;
+  if (list.includes("*")) return true;
+  return list.includes(profile.email.trim().toLowerCase());
 }

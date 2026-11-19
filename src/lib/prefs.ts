@@ -1,4 +1,4 @@
-// Single-user preferences kept in Neon (table `preferences`), so they follow the owner across devices.
+// Per-user preferences kept in Neon (table `preferences`), isolated by user_email prefix.
 import { neon } from "@neondatabase/serverless";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { cache } from "react";
@@ -8,33 +8,63 @@ import { normalizeWindow } from "./day-summary";
 import { normalizeAwaitingDays } from "./email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs, type PlanPrefs } from "./task-dates";
 import { normalizeRule, type EmailRule } from "./email-rules";
+import { getCurrentUserEmail } from "./user";
 
 const CALENDARS = "calendars";
 const EMAIL_RULES = "email_rules";
 const AWAITING_DAYS = "awaiting_days";
 const MEETING_WINDOW = "meeting_window_min";
 const CLICKUP_LIST = "default_clickup_list";
+const CLICKUP_TOKEN = "clickup_token";
 const KEYBOARD_SHORTCUTS = "keyboard_shortcuts";
 const DAY_PLAN = "day_plan";
 
-const loadPrefsMap = cache(
-  unstable_cache(
-    async (): Promise<Record<string, unknown>> => {
-      const sql = neon(process.env.DATABASE_URL ?? "");
-      const rows = await sql`SELECT key, value FROM preferences`;
-      const out: Record<string, unknown> = {};
-      for (const r of rows) out[String(r.key)] = r.value;
-      return out;
-    },
-    ["preferences-all"],
-    { revalidate: 120, tags: ["prefs"] },
-  ),
+function primaryAllowedEmail(): string | null {
+  const raw = process.env.ALLOWED_EMAILS ?? process.env.ALLOWED_EMAIL ?? "";
+  const first = raw
+    .split(/[\s,;]+/)
+    .map((s) => s.trim().toLowerCase())
+    .find((s) => s && s !== "*");
+  return first ?? null;
+}
+
+const fetchPrefsByUser = unstable_cache(
+  async (email: string): Promise<Record<string, unknown>> => {
+    const sql = neon(process.env.DATABASE_URL ?? "");
+    const prefix = `${email}:`;
+    const isPrimary = email !== "" && email === primaryAllowedEmail();
+    const rows = isPrimary
+      ? await sql`SELECT key, value FROM preferences WHERE key LIKE ${prefix + "%"} OR key NOT LIKE '%:%'`
+      : await sql`SELECT key, value FROM preferences WHERE key LIKE ${prefix + "%"}`;
+    const out: Record<string, unknown> = {};
+    // Legacy keys (without prefix) are loaded first so user-prefixed keys always take precedence.
+    for (const r of rows) {
+      const k = String(r.key);
+      if (!k.includes(":")) out[k] = r.value;
+    }
+    for (const r of rows) {
+      const k = String(r.key);
+      if (k.startsWith(prefix)) out[k.slice(prefix.length)] = r.value;
+    }
+    return out;
+  },
+  ["preferences-by-user"],
+  { revalidate: 120, tags: ["prefs"] },
 );
 
+const loadPrefsMap = cache(async (): Promise<Record<string, unknown>> => {
+  const email = await getCurrentUserEmail();
+  if (!email) return {};
+  return fetchPrefsByUser(email);
+});
+
 async function upsertPref(key: string, value: unknown): Promise<void> {
+  const email = await getCurrentUserEmail();
+  if (!email) throw new Error("Não autenticado");
+  const scopedKey = `${email}:${key}`;
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`
-    INSERT INTO preferences (key, value) VALUES (${key}, ${JSON.stringify(value)}::jsonb)
+    INSERT INTO preferences (key, value) VALUES (${scopedKey}, ${JSON.stringify(value)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
   revalidateTag("prefs");
 }
@@ -88,6 +118,26 @@ export async function getDefaultClickupList(): Promise<string> {
 
 export async function setDefaultClickupList(id: string): Promise<void> {
   await upsertPref(CLICKUP_LIST, normalizeClickupList(id));
+}
+
+// Per-user ClickUp token; falls back to CLICKUP_API_TOKEN only for the primary owner account.
+export async function getUserClickupToken(): Promise<string | null> {
+  const email = await getCurrentUserEmail();
+  if (!email) return null;
+  const map = await loadPrefsMap();
+  if (CLICKUP_TOKEN in map) {
+    const v = typeof map[CLICKUP_TOKEN] === "string" ? map[CLICKUP_TOKEN].trim() : "";
+    return v || null;
+  }
+  if (email === primaryAllowedEmail()) {
+    return process.env.CLICKUP_API_TOKEN?.trim() || null;
+  }
+  return null;
+}
+
+export async function setUserClickupToken(token: string): Promise<void> {
+  await upsertPref(CLICKUP_TOKEN, token.trim());
+  revalidateTag("tasks");
 }
 
 // Keyboard shortcuts on the E-mails triage desk; enabled until the owner disables them.

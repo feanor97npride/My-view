@@ -77,9 +77,10 @@ export function countByDay(dates: Date[], days: number, tz: string, now = new Da
   return out;
 }
 
-async function fetchLists(query: string): Promise<RawTask[]> {
-  const token = process.env.CLICKUP_API_TOKEN;
-  if (!token) throw new Error("CLICKUP_API_TOKEN não configurado");
+import { getUserClickupToken } from "./prefs";
+import { getCurrentUserEmail } from "./user";
+
+async function fetchLists(query: string, token: string): Promise<RawTask[]> {
   const all = await Promise.all(
     LISTS.map(async (id) => {
       // shortcut: only the first 100 tasks per list (one page), enough for a daily view
@@ -96,19 +97,32 @@ async function fetchLists(query: string): Promise<RawTask[]> {
 }
 
 const cachedOpenRaw = unstable_cache(
-  () => fetchLists("include_closed=false"),
+  (scope: string, token: string) => {
+    void scope;
+    return fetchLists("include_closed=false", token);
+  },
   ["clickup-open-raw"],
   { revalidate: 60, tags: ["tasks"] },
 );
 
 const cachedDoneRaw = unstable_cache(
-  (since: number) => fetchLists(`include_closed=true&date_done_gt=${since}`),
+  (scope: string, token: string, since: number) => {
+    void scope;
+    return fetchLists(`include_closed=true&date_done_gt=${since}`, token);
+  },
   ["clickup-done-raw"],
   { revalidate: 120, tags: ["tasks"] },
 );
 
+async function requireClickup(): Promise<{ email: string; token: string }> {
+  const [email, token] = await Promise.all([getCurrentUserEmail(), getUserClickupToken()]);
+  if (!token) throw new Error("ClickUp não configurado para esta conta (configure em Configurações → ClickUp).");
+  return { email: email ?? "", token };
+}
+
 export const openTasks = cache(async (now = new Date()): Promise<Task[]> => {
-  return (await cachedOpenRaw())
+  const { email, token } = await requireClickup();
+  return (await cachedOpenRaw(email, token))
     .filter((t) => !isClosed(t))
     .map((t) => {
       const due = t.due_date ? new Date(Number(t.due_date)) : null;
@@ -128,26 +142,41 @@ export const openTasks = cache(async (now = new Date()): Promise<Task[]> => {
     .sort((a, b) => (a.due?.getTime() ?? Infinity) - (b.due?.getTime() ?? Infinity));
 });
 
-// Overdue plus due-today tasks, cached for 60 s so the menu badge does not hit ClickUp on every page.
-export const urgentTasksCount = unstable_cache(
-  async () => (await openTasks()).filter((t) => t.bucket === "overdue" || t.bucket === "today").length,
+const cachedUrgentCount = unstable_cache(
+  async (scope: string, token: string) => {
+    const raw = await cachedOpenRaw(scope, token);
+    const now = new Date();
+    return raw
+      .filter((t) => !isClosed(t))
+      .filter((t) => {
+        const b = bucketOf(t.due_date ? new Date(Number(t.due_date)) : null, now);
+        return b === "overdue" || b === "today";
+      }).length;
+  },
   ["urgent-tasks-count"],
   { revalidate: 60, tags: ["tasks"] },
 );
 
+// Overdue plus due-today tasks, cached for 60 s per user so the menu badge does not hit ClickUp on every page.
+export async function urgentTasksCount(): Promise<number> {
+  const [email, token] = await Promise.all([getCurrentUserEmail(), getUserClickupToken()]);
+  if (!token) return 0;
+  return cachedUrgentCount(email ?? "", token);
+}
+
 // When tasks were completed during the last `days` days.
 export const completedDates = cache(async (days = 14, now = new Date()): Promise<Date[]> => {
+  const { email, token } = await requireClickup();
   // Bucket timestamp to the hour so cache keys stay stable across requests within the same hour.
   const hourBucket = Math.floor(now.getTime() / 3_600_000) * 3_600_000;
   const since = hourBucket - days * 86_400_000;
-  return (await cachedDoneRaw(since))
+  return (await cachedDoneRaw(email, token, since))
     .filter((t) => isClosed(t) && t.date_done)
     .map((t) => new Date(Number(t.date_done)));
 });
 
 export async function createClickupTask(listId: string, input: { name: string; description: string }): Promise<{ id: string; url: string }> {
-  const token = process.env.CLICKUP_API_TOKEN;
-  if (!token) throw new Error("CLICKUP_API_TOKEN não configurado");
+  const { token } = await requireClickup();
   const res = await fetch(`${API}/list/${encodeURIComponent(normalizeClickupList(listId))}/task`, {
     method: "POST",
     headers: { Authorization: token, "Content-Type": "application/json" },
@@ -160,8 +189,7 @@ export async function createClickupTask(listId: string, input: { name: string; d
 }
 
 export async function deleteClickupTask(taskId: string): Promise<void> {
-  const token = process.env.CLICKUP_API_TOKEN;
-  if (!token) throw new Error("CLICKUP_API_TOKEN não configurado");
+  const { token } = await requireClickup();
   const res = await fetch(`${API}/task/${encodeURIComponent(taskId)}`, {
     method: "DELETE",
     headers: { Authorization: token },
@@ -170,9 +198,8 @@ export async function deleteClickupTask(taskId: string): Promise<void> {
   if (!res.ok && res.status !== 404) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
-const clickupHeaders = () => {
-  const token = process.env.CLICKUP_API_TOKEN;
-  if (!token) throw new Error("CLICKUP_API_TOKEN não configurado");
+const clickupHeaders = async () => {
+  const { token } = await requireClickup();
   return { Authorization: token, "Content-Type": "application/json" };
 };
 
@@ -182,7 +209,7 @@ export type TaskSnapshot = { id: string; listId: string; status: string; dueMs: 
 
 // Reads the fields an action needs to undo itself, and the list so the caller can check the task is in scope.
 export async function getClickupTask(taskId: string): Promise<TaskSnapshot> {
-  const res = await fetch(`${API}/task/${encodeURIComponent(taskId)}`, { headers: clickupHeaders(), cache: "no-store" });
+  const res = await fetch(`${API}/task/${encodeURIComponent(taskId)}`, { headers: await clickupHeaders(), cache: "no-store" });
   if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const t = (await res.json()) as { id: string; status: { status: string }; due_date: string | null; list: { id: string } };
   return { id: t.id, listId: t.list.id, status: t.status.status, dueMs: t.due_date ? Number(t.due_date) : null };
@@ -190,8 +217,9 @@ export async function getClickupTask(taskId: string): Promise<TaskSnapshot> {
 
 export type ListStatus = { status: string; type: string };
 
-export async function listStatuses(listId: string): Promise<ListStatus[]> {
-  const res = await fetch(`${API}/list/${encodeURIComponent(listId)}`, { headers: clickupHeaders(), cache: "no-store" });
+export async function listStatuses(listId: string, explicitToken?: string): Promise<ListStatus[]> {
+  const headers = explicitToken ? { Authorization: explicitToken, "Content-Type": "application/json" } : await clickupHeaders();
+  const res = await fetch(`${API}/list/${encodeURIComponent(listId)}`, { headers, cache: "no-store" });
   if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = (await res.json()) as { statuses?: ListStatus[] };
   return j.statuses ?? [];
@@ -207,12 +235,22 @@ export async function updateClickupTask(taskId: string, patch: { status?: string
   if (patch.dueMs !== undefined) body.due_date = patch.dueMs;
   const res = await fetch(`${API}/task/${encodeURIComponent(taskId)}`, {
     method: "PUT",
-    headers: clickupHeaders(),
+    headers: await clickupHeaders(),
     body: JSON.stringify(body),
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
-// Statuses per list change rarely, so the Hoje screen reads them from a 10-minute cache.
-export const cachedListStatuses = unstable_cache(listStatuses, ["list-statuses"], { revalidate: 600 });
+const cachedStatusesByScope = unstable_cache(
+  (listId: string, token: string) => listStatuses(listId, token),
+  ["list-statuses"],
+  { revalidate: 600 },
+);
+
+// Statuses per list change rarely, so the Hoje screen reads them from a 10-minute cache per token.
+export async function cachedListStatuses(listId: string): Promise<ListStatus[]> {
+  const token = await getUserClickupToken();
+  if (!token) return [];
+  return cachedStatusesByScope(listId, token);
+}

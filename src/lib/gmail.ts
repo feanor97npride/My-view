@@ -4,6 +4,20 @@ import { neon } from "@neondatabase/serverless";
 import { BULK_CATEGORIES, CATEGORIES, categorize, isCategory, parseCategory, type Category } from "./email-rules";
 import { pickAwaiting, type Awaiting, type EmailItem, type ThreadLike } from "./email-view";
 import { getEmailRules } from "./prefs";
+import { getCurrentUserEmail } from "./user";
+
+let ownerReady: Promise<unknown> | null = null;
+const ensureEmailsOwner = () => {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  ownerReady ??= (async () => {
+    await sql`ALTER TABLE emails ADD COLUMN IF NOT EXISTS user_email text NOT NULL DEFAULT ''`;
+    await sql`CREATE INDEX IF NOT EXISTS emails_user_idx ON emails (user_email, received_at DESC)`;
+  })().catch((e) => {
+    ownerReady = null;
+    throw e;
+  });
+  return ownerReady;
+};
 
 // Returns a category, or a short error code (stored in classified_by so failures are visible in the database).
 const MAX_BULK_AI = 15;
@@ -113,10 +127,12 @@ export async function syncEmails(token: string) {
     ),
   );
 
+  const userEmail = (await getCurrentUserEmail()) ?? "";
+  await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
   const ids = msgs.map((m) => m.id);
   const known = ids.length
-    ? await sql`SELECT id, category, classified_by FROM emails WHERE id = ANY(${ids})`
+    ? await sql`SELECT id, category, classified_by FROM emails WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`
     : [];
   const knownMap = new Map(known.map((r) => [r.id as string, r]));
 
@@ -169,7 +185,7 @@ export async function syncEmails(token: string) {
     }
     const receivedAt = new Date(Number(m.internalDate));
     const unread = m.labelIds?.includes("UNREAD") ?? false;
-    rows.push({ id: m.id, sender, subject, received_at: receivedAt.toISOString(), unread, category, classified_by: by });
+    rows.push({ id: m.id, sender, subject, received_at: receivedAt.toISOString(), unread, category, classified_by: by, user_email: userEmail });
     emails.push({
       id: m.id,
       threadId: m.threadId,
@@ -185,11 +201,11 @@ export async function syncEmails(token: string) {
 
   if (rows.length) {
     await sql`
-      INSERT INTO emails (id, sender, subject, received_at, unread, category, classified_by, updated_at)
-      SELECT id, sender, subject, received_at, unread, category, classified_by, now()
+      INSERT INTO emails (id, sender, subject, received_at, unread, category, classified_by, user_email, updated_at)
+      SELECT id, sender, subject, received_at, unread, category, classified_by, user_email, now()
       FROM json_populate_recordset(NULL::emails, ${JSON.stringify(rows)})
       ON CONFLICT (id) DO UPDATE SET unread = EXCLUDED.unread, category = EXCLUDED.category,
-        classified_by = EXCLUDED.classified_by, updated_at = now()`;
+        classified_by = EXCLUDED.classified_by, user_email = EXCLUDED.user_email, updated_at = now()`;
   }
 
   return { counts: await emailCounts(), emails: emails.sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime()) };
@@ -197,17 +213,26 @@ export async function syncEmails(token: string) {
 
 // E-mails per category over the last 7 days, read from the database (no Gmail call).
 export async function emailCounts(): Promise<Record<string, number>> {
+  const userEmail = (await getCurrentUserEmail()) ?? "";
+  await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
   const rows = await sql`
     SELECT category, COUNT(*)::int AS n FROM emails
-    WHERE received_at > now() - interval '7 days' GROUP BY category`;
+    WHERE received_at > now() - interval '7 days' AND user_email = ${userEmail}
+    GROUP BY category`;
   return Object.fromEntries(rows.map((c) => [c.category, c.n]));
 }
 
 // Unread action e-mails from the database only (no Gmail call), cheap enough for the menu badge on every page.
 export async function unreadActionCount(): Promise<number> {
+  const userEmail = (await getCurrentUserEmail()) ?? "";
+  await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
-  const rows = await sql`SELECT COUNT(*)::int AS n FROM emails WHERE unread AND category IN ('acao', 'seguranca') AND received_at > now() - interval '7 days'`;
+  const rows = await sql`
+    SELECT COUNT(*)::int AS n FROM emails
+    WHERE unread AND category IN ('acao', 'seguranca')
+      AND received_at > now() - interval '7 days'
+      AND user_email = ${userEmail}`;
   return rows[0]?.n ?? 0;
 }
 
@@ -237,15 +262,17 @@ export async function unarchiveEmail(token: string, id: string): Promise<void> {
 export async function markEmailsRead(token: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   await gpost("/messages/batchModify", token, { ids, removeLabelIds: ["UNREAD"] });
+  const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
-  await sql`UPDATE emails SET unread = false, updated_at = now() WHERE id = ANY(${ids})`.catch(() => {});
+  await sql`UPDATE emails SET unread = false, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
 }
 
 export async function markEmailsUnread(token: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   await gpost("/messages/batchModify", token, { ids, addLabelIds: ["UNREAD"] });
+  const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
-  await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids})`.catch(() => {});
+  await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
 }
 
 export async function createFollowupDraft(
@@ -322,8 +349,9 @@ export async function summarizeInformativosWithAI(
 }
 
 export async function updateEmailCategory(id: string, category: string, by = "rule:user"): Promise<void> {
+  const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
-  await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id}`.catch(() => {});
+  await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id} AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
 }
 
 export async function muteSenderFilter(token: string, senderEmail: string, archiveIds: string[] = []): Promise<{ id: string }> {
