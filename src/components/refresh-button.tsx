@@ -7,10 +7,17 @@ export default function RefreshButton() {
   const router = useRouter();
   const [pending, start] = useTransition();
 
+  const handleRefresh = () => {
+    start(async () => {
+      await fetch("/api/refresh", { method: "POST" }).catch(() => {});
+      router.refresh();
+    });
+  };
+
   return (
     <button
       type="button"
-      onClick={() => start(() => router.refresh())}
+      onClick={handleRefresh}
       disabled={pending}
       className="spring-btn inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent p-0 font-medium text-link hover:underline disabled:opacity-60"
     >

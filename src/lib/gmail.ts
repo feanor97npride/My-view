@@ -1,7 +1,9 @@
 // Read-only Gmail metadata (sender, subject, date, unread) classified into categories.
 // Bodies are never fetched or stored. The short Gmail snippet is shown in the list but kept in memory only.
 import { neon } from "@neondatabase/serverless";
-import { BULK_CATEGORIES, CATEGORIES, categorize, isCategory, parseCategory, type Category } from "./email-rules";
+import { revalidateTag, unstable_cache } from "next/cache";
+import { cache } from "react";
+import { BULK_CATEGORIES, CATEGORIES, categorize, isCategory, parseCategory, type Category, type EmailRule } from "./email-rules";
 import { pickAwaiting, type Awaiting, type EmailItem, type ThreadLike } from "./email-view";
 import { getEmailRules } from "./prefs";
 import { getCurrentUserEmail } from "./user";
@@ -32,6 +34,7 @@ async function classifyWithAI(sender: string, subject: string, allowed: readonly
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         model: "claude-haiku-5-5",
         max_tokens: 1024, // the model may emit a thinking block first; 200 was not always enough for the answer to follow
@@ -115,19 +118,17 @@ async function gpost(path: string, token: string, body: unknown): Promise<void> 
   if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
-// shortcut: only the 50 most recent matching messages per load, upgrade with pagination when the inbox grows
-export async function syncEmails(token: string) {
-  const [list, userRules] = await Promise.all([
-    gget<{ messages?: { id: string }[] }>(`/messages?q=${encodeURIComponent("is:unread OR newer_than:7d")}&maxResults=50`, token),
-    getEmailRules().catch(() => []), // rules are optional: without them only keywords, bulk mail and the AI apply
-  ]);
+async function syncEmailsUncached(token: string, userEmail: string, userRules: EmailRule[]) {
+  const list = await gget<{ messages?: { id: string }[] }>(
+    `/messages?q=${encodeURIComponent("is:unread OR newer_than:7d")}&maxResults=50`,
+    token,
+  );
   const msgs = await Promise.all(
     (list.messages ?? []).map((m) =>
       gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
     ),
   );
 
-  const userEmail = (await getCurrentUserEmail()) ?? "";
   await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
   const ids = msgs.map((m) => m.id);
@@ -136,12 +137,17 @@ export async function syncEmails(token: string) {
     : [];
   const knownMap = new Map(known.map((r) => [r.id as string, r]));
 
-  // Rules are re-checked on every load and always win, even over an older AI answer.
-  // The AI only runs for new e-mails, earlier failures, or e-mails whose rule no longer matches.
-  // Sequential on purpose: parallel bursts hit the API rate limit and fall back to "informativo".
-  const rows: Record<string, unknown>[] = [];
-  const emails: EmailItem[] = [];
+  type DraftItem = {
+    m: GMsg;
+    sender: string;
+    subject: string;
+    category?: Category;
+    by?: string;
+    needsAi?: { allowed: readonly string[]; isBulk: boolean };
+  };
+
   let bulkBudget = MAX_BULK_AI;
+  const drafts: DraftItem[] = [];
   for (const m of msgs) {
     const headers = m.payload.headers ?? [];
     const h = (n: string) => headers.find((x) => x.name === n)?.value ?? "";
@@ -151,10 +157,9 @@ export async function syncEmails(token: string) {
     const old = knownMap.get(m.id);
     let category = old?.category as Category | undefined;
     let by = old?.classified_by as string | undefined;
+    let needsAi: DraftItem["needsAi"];
     const decided = categorize(sender, subject, hasUnsub, userRules);
     if (decided && decided.by === "rule:bulk") {
-      // Mass mail: the AI only separates it into compras / promoções / social / segurança / informativo.
-      // An earlier answer is kept, and at most MAX_BULK_AI new questions run per load so the page stays fast.
       if (old?.classified_by === "ai:bulk" && (BULK_CATEGORIES as readonly string[]).includes(old.category as string)) {
         category = old.category as Category;
         by = "ai:bulk";
@@ -163,39 +168,60 @@ export async function syncEmails(token: string) {
         by = decided.by;
         if (bulkBudget > 0) {
           bulkBudget--;
-          const ai = await classifyWithAI(sender, subject, BULK_CATEGORIES);
-          if (isCategory(ai)) {
-            category = ai;
-            by = "ai:bulk";
-          }
+          needsAi = { allowed: BULK_CATEGORIES, isBulk: true };
         }
       }
     } else if (decided) {
       category = decided.category;
       by = decided.by;
     } else if (!category || by?.startsWith("fallback") || by?.startsWith("rule")) {
-      const ai = await classifyWithAI(sender, subject);
-      if (isCategory(ai)) {
-        category = ai;
-        by = "ai";
-      } else {
-        category = "informativo";
-        by = `fallback:${ai}`;
-      }
+      needsAi = { allowed: CATEGORIES, isBulk: false };
     }
-    const receivedAt = new Date(Number(m.internalDate));
-    const unread = m.labelIds?.includes("UNREAD") ?? false;
-    rows.push({ id: m.id, sender, subject, received_at: receivedAt.toISOString(), unread, category, classified_by: by, user_email: userEmail });
+    drafts.push({ m, sender, subject, category, by, needsAi });
+  }
+
+  // Run pending AI classifications with bounded concurrency (3) to avoid rate-limits while staying ~3x faster.
+  const pendingAi = drafts.filter((d) => d.needsAi);
+  for (let i = 0; i < pendingAi.length; i += 3) {
+    await Promise.all(
+      pendingAi.slice(i, i + 3).map(async (d) => {
+        const ai = await classifyWithAI(d.sender, d.subject, d.needsAi!.allowed);
+        if (isCategory(ai)) {
+          d.category = ai;
+          d.by = d.needsAi!.isBulk ? "ai:bulk" : "ai";
+        } else if (!d.needsAi!.isBulk) {
+          d.category = "informativo";
+          d.by = `fallback:${ai}`;
+        }
+      }),
+    );
+  }
+
+  const rows: Record<string, unknown>[] = [];
+  const emails: (Omit<EmailItem, "receivedAt"> & { receivedAt: string })[] = [];
+  for (const d of drafts) {
+    const receivedAt = new Date(Number(d.m.internalDate)).toISOString();
+    const unread = d.m.labelIds?.includes("UNREAD") ?? false;
+    rows.push({
+      id: d.m.id,
+      sender: d.sender,
+      subject: d.subject,
+      received_at: receivedAt,
+      unread,
+      category: d.category,
+      classified_by: d.by,
+      user_email: userEmail,
+    });
     emails.push({
-      id: m.id,
-      threadId: m.threadId,
-      sender,
-      subject,
+      id: d.m.id,
+      threadId: d.m.threadId,
+      sender: d.sender,
+      subject: d.subject,
       receivedAt,
       unread,
-      category: category as string,
-      snippet: m.snippet ?? "", // raw: still HTML-encoded, decoded where it is displayed
-      attachments: extractAttachments(m.payload),
+      category: d.category as string,
+      snippet: d.m.snippet ?? "", // raw: still HTML-encoded, decoded where it is displayed
+      attachments: extractAttachments(d.m.payload),
     });
   }
 
@@ -208,12 +234,37 @@ export async function syncEmails(token: string) {
         classified_by = EXCLUDED.classified_by, user_email = EXCLUDED.user_email, updated_at = now()`;
   }
 
-  return { counts: await emailCounts(), emails: emails.sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime()) };
+  const counts = await fetchEmailCountsByUser(userEmail);
+  return {
+    counts,
+    emails: emails.sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt)),
+  };
 }
 
-// E-mails per category over the last 7 days, read from the database (no Gmail call).
-export async function emailCounts(): Promise<Record<string, number>> {
-  const userEmail = (await getCurrentUserEmail()) ?? "";
+const cachedSyncEmails = unstable_cache(
+  async (userEmail: string, rulesKey: string, token: string, userRules: EmailRule[]) => {
+    void rulesKey;
+    return syncEmailsUncached(token, userEmail, userRules);
+  },
+  ["gmail-sync"],
+  { revalidate: 45, tags: ["emails"] },
+);
+
+// shortcut: only the 50 most recent matching messages per load, upgrade with pagination when the inbox grows
+export const syncEmails = cache(async (token: string) => {
+  const [userEmail, userRules] = await Promise.all([
+    getCurrentUserEmail().then((e) => e ?? ""),
+    getEmailRules().catch(() => [] as EmailRule[]),
+  ]);
+  const rulesKey = JSON.stringify(userRules);
+  const raw = await cachedSyncEmails(userEmail, rulesKey, token, userRules);
+  return {
+    counts: raw.counts,
+    emails: raw.emails.map((e) => ({ ...e, receivedAt: new Date(e.receivedAt) })),
+  };
+});
+
+async function fetchEmailCountsByUser(userEmail: string): Promise<Record<string, number>> {
   await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
   const rows = await sql`
@@ -223,8 +274,14 @@ export async function emailCounts(): Promise<Record<string, number>> {
   return Object.fromEntries(rows.map((c) => [c.category, c.n]));
 }
 
+// E-mails per category over the last 7 days, read from the database (no Gmail call).
+export const emailCounts = cache(async (): Promise<Record<string, number>> => {
+  const userEmail = (await getCurrentUserEmail()) ?? "";
+  return fetchEmailCountsByUser(userEmail);
+});
+
 // Unread action e-mails from the database only (no Gmail call), cheap enough for the menu badge on every page.
-export async function unreadActionCount(): Promise<number> {
+export const unreadActionCount = cache(async (): Promise<number> => {
   const userEmail = (await getCurrentUserEmail()) ?? "";
   await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
@@ -234,29 +291,41 @@ export async function unreadActionCount(): Promise<number> {
       AND received_at > now() - interval '7 days'
       AND user_email = ${userEmail}`;
   return rows[0]?.n ?? 0;
-}
+});
+
+const cachedAwaitingReply = unstable_cache(
+  async (myEmail: string, minDays: number, dayKey: string, token: string) => {
+    void dayKey;
+    const list = await gget<{ threads?: { id: string }[] }>(
+      `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=30`,
+      token,
+    );
+    const threads = await Promise.all(
+      (list.threads ?? []).map((t) =>
+        gget<ThreadLike>(`/threads/${t.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`, token),
+      ),
+    );
+    return pickAwaiting(threads, myEmail, new Date(), minDays);
+  },
+  ["gmail-awaiting-reply"],
+  { revalidate: 45, tags: ["emails"] },
+);
 
 // Conversations where my message is the last one and nobody answered yet (sent mail, last 14 days).
 // shortcut: at most 30 conversations, upgrade with pagination if you send more than that in two weeks
-export async function awaitingReply(token: string, myEmail: string, minDays: number, now = new Date()): Promise<Awaiting[]> {
-  const list = await gget<{ threads?: { id: string }[] }>(
-    `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=30`,
-    token,
-  );
-  const threads = await Promise.all(
-    (list.threads ?? []).map((t) =>
-      gget<ThreadLike>(`/threads/${t.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`, token),
-    ),
-  );
-  return pickAwaiting(threads, myEmail, now, minDays);
-}
+export const awaitingReply = cache(async (token: string, myEmail: string, minDays: number, now = new Date()): Promise<Awaiting[]> => {
+  const dayKey = now.toISOString().slice(0, 10);
+  return cachedAwaitingReply(myEmail, minDays, dayKey, token);
+});
 
 export async function archiveEmail(token: string, id: string): Promise<void> {
   await gpost(`/messages/${encodeURIComponent(id)}/modify`, token, { removeLabelIds: ["INBOX"] });
+  revalidateTag("emails");
 }
 
 export async function unarchiveEmail(token: string, id: string): Promise<void> {
   await gpost(`/messages/${encodeURIComponent(id)}/modify`, token, { addLabelIds: ["INBOX"] });
+  revalidateTag("emails");
 }
 
 export async function markEmailsRead(token: string, ids: string[]): Promise<void> {
@@ -265,6 +334,7 @@ export async function markEmailsRead(token: string, ids: string[]): Promise<void
   const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`UPDATE emails SET unread = false, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
+  revalidateTag("emails");
 }
 
 export async function markEmailsUnread(token: string, ids: string[]): Promise<void> {
@@ -273,6 +343,7 @@ export async function markEmailsUnread(token: string, ids: string[]): Promise<vo
   const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
+  revalidateTag("emails");
 }
 
 export async function createFollowupDraft(
@@ -352,6 +423,7 @@ export async function updateEmailCategory(id: string, category: string, by = "ru
   const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id} AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
+  revalidateTag("emails");
 }
 
 export async function muteSenderFilter(token: string, senderEmail: string, archiveIds: string[] = []): Promise<{ id: string }> {
@@ -369,6 +441,7 @@ export async function muteSenderFilter(token: string, senderEmail: string, archi
   if (archiveIds.length > 0) {
     await gpost("/messages/batchModify", token, { ids: archiveIds, removeLabelIds: ["INBOX"] }).catch(() => {});
   }
+  revalidateTag("emails");
   return { id: j.id };
 }
 
@@ -382,4 +455,5 @@ export async function deleteSenderFilter(token: string, filterId: string, restor
   if (restoreIds.length > 0) {
     await gpost("/messages/batchModify", token, { ids: restoreIds, addLabelIds: ["INBOX"] }).catch(() => {});
   }
+  revalidateTag("emails");
 }

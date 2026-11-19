@@ -1,5 +1,6 @@
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { cache } from "react";
+import { getCurrentUserEmail } from "./user";
 
 // Read-only Google Calendar access for "today" (no SDK: plain REST keeps the dependency count down).
 const API = "https://www.googleapis.com/calendar/v3";
@@ -101,8 +102,8 @@ export function busyHours(events: CalEvent[]): number {
   return total / 3_600_000;
 }
 
-// Events from the start of today through the end of day `days` (1 = today only).
-export async function timeline(token: string, now = new Date(), days = 1, selected?: string[] | null) {
+async function fetchTimeline(token: string, nowIso: string, days: number, selected: string[] | null | undefined) {
+  const now = new Date(nowIso);
   const { items } = await get<{ items: { id: string; summary: string; primary?: boolean; timeZone?: string }[] }>(
     "/users/me/calendarList",
     token,
@@ -120,22 +121,44 @@ export async function timeline(token: string, now = new Date(), days = 1, select
     ),
   );
   const events = lists.flat().sort((a, b) => a.start.getTime() - b.start.getTime());
-  return { tz, events };
+  return {
+    tz,
+    events: events.map((e) => ({ ...e, start: e.start.toISOString(), end: e.end.toISOString() })),
+  };
 }
 
-// Timed events of today still to end, as ISO strings, cached 60 s per token so the meeting banner
-// in the shared layout does not call Google on every page. The browser keeps the countdown moving.
-export const upcomingTimed = unstable_cache(
-  async (token: string, selected: string[] | null) => {
-    const t = await timeline(token, new Date(), 1, selected);
-    const now = Date.now();
-    return t.events
-      .filter((e) => !e.allDay && e.end.getTime() > now)
-      .map((e) => ({ id: e.id, title: e.title, start: e.start.toISOString(), end: e.end.toISOString() }));
+const cachedTimeline = unstable_cache(
+  async (userEmail: string, dayKey: string, days: number, selectedKey: string, token: string, nowIso: string, selected: string[] | null | undefined) => {
+    void userEmail;
+    void dayKey;
+    void selectedKey;
+    return fetchTimeline(token, nowIso, days, selected);
   },
-  ["upcoming-timed"],
-  { revalidate: 60 },
+  ["calendar-timeline"],
+  { revalidate: 45, tags: ["calendar"] },
 );
+
+// Events from the start of today through the end of day `days` (1 = today only).
+export const timeline = cache(async (token: string, now = new Date(), days = 1, selected?: string[] | null) => {
+  const userEmail = (await getCurrentUserEmail()) ?? "";
+  const dayKey = now.toISOString().slice(0, 10);
+  const selectedKey = selected ? [...selected].sort().join(",") : "all";
+  const raw = await cachedTimeline(userEmail, dayKey, days, selectedKey, token, now.toISOString(), selected);
+  return {
+    tz: raw.tz,
+    events: raw.events.map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end) })),
+  };
+});
+
+// Timed events of today still to end, as ISO strings, cached 60 s per user so the meeting banner
+// in the shared layout does not call Google on every page. The browser keeps the countdown moving.
+export async function upcomingTimed(token: string, selected: string[] | null) {
+  const t = await timeline(token, new Date(), 1, selected);
+  const now = Date.now();
+  return t.events
+    .filter((e) => !e.allDay && e.end.getTime() > now)
+    .map((e) => ({ id: e.id, title: e.title, start: e.start.toISOString(), end: e.end.toISOString() }));
+}
 
 export async function createCalendarEvent(
   token: string,
@@ -154,6 +177,7 @@ export async function createCalendarEvent(
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Google Calendar ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  revalidateTag("calendar");
   const j = (await res.json()) as { id: string; htmlLink?: string };
   return { id: j.id, link: j.htmlLink ?? null };
 }
@@ -165,4 +189,5 @@ export async function deleteCalendarEvent(token: string, eventId: string, calend
     cache: "no-store",
   });
   if (!res.ok && res.status !== 404) throw new Error(`Google Calendar ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  revalidateTag("calendar");
 }

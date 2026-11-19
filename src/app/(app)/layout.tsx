@@ -1,3 +1,4 @@
+import { cache, Suspense } from "react";
 import { auth, signOut } from "@/auth";
 import { primaryTz, upcomingTimed } from "@/lib/calendar";
 import { urgentTasksCount } from "@/lib/clickup";
@@ -37,10 +38,8 @@ function SignOut() {
   );
 }
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+const getLayoutChromeData = cache(async () => {
   const session = await auth();
-  const name = session?.user?.name ?? "Usuário";
-  // badge is optional: a database failure just hides it
   const [mailCount, taskCount, windowMin, selected, tz] = await Promise.all([
     unreadActionCount().catch(() => 0),
     urgentTasksCount().catch(() => 0),
@@ -61,6 +60,49 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }
     : null;
 
+  return { badges, meetings, windowMin, nextMeeting, taskCount, mailCount };
+});
+
+async function SidebarWithData({ userName }: { userName: string }) {
+  const { badges, nextMeeting } = await getLayoutChromeData();
+  return (
+    <SidebarShell
+      badges={badges}
+      nextMeeting={nextMeeting}
+      userName={userName}
+      themeToggle={<ThemeToggle />}
+      signOut={<SignOut />}
+    />
+  );
+}
+
+async function BottomNavWithData() {
+  const { badges } = await getLayoutChromeData();
+  return <NavLinks variant="bottom" badges={badges} />;
+}
+
+async function LiveMeetingBanner() {
+  const { meetings, windowMin } = await getLayoutChromeData();
+  return <MeetingBanner events={meetings} serverNow={new Date().toISOString()} windowMin={windowMin} />;
+}
+
+async function LiveAlertsPopup() {
+  const { meetings, windowMin, taskCount, mailCount } = await getLayoutChromeData();
+  return (
+    <AlertsPopup
+      events={meetings}
+      serverNow={new Date().toISOString()}
+      windowMin={windowMin}
+      taskCount={taskCount}
+      mailCount={mailCount}
+    />
+  );
+}
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+  const name = session?.user?.name ?? "Usuário";
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <a
@@ -69,13 +111,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Pular para o conteúdo
       </a>
-      <SidebarShell
-        badges={badges}
-        nextMeeting={nextMeeting}
-        userName={name}
-        themeToggle={<ThemeToggle />}
-        signOut={<SignOut />}
-      />
+      <Suspense
+        fallback={
+          <SidebarShell
+            badges={{}}
+            nextMeeting={null}
+            userName={name}
+            themeToggle={<ThemeToggle />}
+            signOut={<SignOut />}
+          />
+        }
+      >
+        <SidebarWithData userName={name} />
+      </Suspense>
 
       <header className="flex items-center justify-between border-b border-line bg-card px-4 py-3 md:hidden">
         <Brand />
@@ -87,19 +135,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <div className="min-w-0 flex-1 pb-24 md:pb-0">
-        <MeetingBanner events={meetings} serverNow={new Date().toISOString()} windowMin={windowMin} />
+        <Suspense fallback={null}>
+          <LiveMeetingBanner />
+        </Suspense>
         <div id="conteudo" tabIndex={-1} className="outline-none">
           {children}
         </div>
       </div>
-      <NavLinks variant="bottom" badges={badges} />
-      <AlertsPopup
-        events={meetings}
-        serverNow={new Date().toISOString()}
-        windowMin={windowMin}
-        taskCount={taskCount}
-        mailCount={mailCount}
-      />
+
+      <Suspense fallback={<NavLinks variant="bottom" badges={{}} />}>
+        <BottomNavWithData />
+      </Suspense>
+      <Suspense fallback={null}>
+        <LiveAlertsPopup />
+      </Suspense>
       <CommandPalette />
     </div>
   );
