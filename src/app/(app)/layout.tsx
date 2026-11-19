@@ -3,6 +3,7 @@ import { primaryTz, upcomingTimed } from "@/lib/calendar";
 import { urgentTasksCount } from "@/lib/clickup";
 import { unreadActionCount } from "@/lib/gmail";
 import { getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
+import AlertsPopup from "@/components/alerts-popup";
 import CommandPalette, { CommandTrigger } from "@/components/command-palette";
 import MeetingBanner from "@/components/meeting-banner";
 import NavLinks from "@/components/nav-links";
@@ -91,6 +92,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
       <NavLinks variant="bottom" badges={badges} />
+      <AlertsPopup
+        events={meetings}
+        serverNow={new Date().toISOString()}
+        windowMin={windowMin}
+        taskCount={taskCount}
+        mailCount={mailCount}
+      />
       <CommandPalette />
     </div>
   );
