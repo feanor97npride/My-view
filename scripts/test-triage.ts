@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types --no-warnings scripts/test-triage.ts
 import assert from "node:assert/strict";
-import { agruparInformativos, buildQueue, maisBarulhento, resumir, senderInfo, tituloResumo, type TriItem } from "../src/lib/triage.ts";
+import { agruparInformativos, buildQueue, extractFinance, financeDueDays, maisBarulhento, resumir, senderInfo, tituloResumo, type TriItem } from "../src/lib/triage.ts";
 
 let n = 0;
 const mk = (category: string, unread: boolean, receivedAt: string, sender = `P${n} <p${n}@x.com>`, subject = `s${n}`): TriItem => ({
@@ -62,5 +62,20 @@ assert.equal(resumir([arquivado]).importantesTriados, 1);
 const triado: TriItem = { ...mk("agendamento", true, "2026-11-18T11:00:00Z"), triado: true, calendarEventId: "ev1" };
 assert.deepEqual(buildQueue([triado], null), []);
 assert.equal(resumir([triado]).importantes, 0);
+
+// extractFinance + urgent financeiro (<= 3 days) beats acao
+assert.deepEqual(extractFinance("Fatura fechou: R$ 1.482,90 com vencimento em 20/11"), {
+  valor: "R$ 1.482,90",
+  vencimento: "20/11",
+});
+assert.deepEqual(extractFinance("Boleto vence amanhã no valor R$ 99,00"), {
+  valor: "R$ 99,00",
+  vencimento: "amanhã",
+});
+const refNow = new Date("2026-11-18T12:00:00Z");
+assert.equal(financeDueDays("20/11", refNow), 2);
+assert.equal(financeDueDays("hoje", refNow), 0);
+const finUrgente = mk("financeiro", true, "2026-11-18T10:00:00Z", "Banco <b@x.com>", "Fatura R$ 500,00 vence 20/11");
+assert.equal(buildQueue([acaoOld, finUrgente], null, refNow)[0].id, finUrgente.id);
 
 console.log("triage: ok");

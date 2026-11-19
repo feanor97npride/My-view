@@ -7,6 +7,7 @@ import {
   FILAS,
   agruparInformativos,
   buildQueue,
+  extractFinance,
   maisBarulhento,
   resumir,
   senderInfo,
@@ -544,9 +545,18 @@ export default function TriageBoard({
                   </div>
                 </div>
                 <h2 className="font-display text-2xl font-bold leading-tight md:text-[30px]">{focus.subject}</h2>
-                <p className="m-0 rounded-2xl p-4 text-[15px] text-ink" style={{ background: "var(--surface-3)" }}>
-                  {decodeEntities(focus.snippet) || "Sem prévia disponível."}
-                </p>
+                <div className="rounded-2xl p-4 text-[15px] text-ink" style={{ background: "var(--surface-3)" }}>
+                  {focus.category === "financeiro" && (() => {
+                    const fin = extractFinance(`${focus.subject} ${decodeEntities(focus.snippet)}`);
+                    return (fin.valor || fin.vencimento) ? (
+                      <p className="mb-2 flex flex-wrap gap-3 text-sm font-bold">
+                        {fin.valor && <span>{fin.valor}</span>}
+                        {fin.vencimento && <span className="text-mute">Vence: {fin.vencimento}</span>}
+                      </p>
+                    ) : null;
+                  })()}
+                  <p className="m-0">{decodeEntities(focus.snippet) || "Sem prévia disponível."}</p>
+                </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <button
                     type="button"
@@ -657,17 +667,24 @@ export default function TriageBoard({
           <section aria-label="Financeiro" className={`${card} flex flex-1 flex-col gap-2 border-0`} style={fill("financeiro")}>
             <span className="text-[13px] font-bold uppercase tracking-[0.06em]">Financeiro · {resumo.porCategoria.financeiro ?? 0}</span>
             {(() => {
-              const f = visible.filter((i) => i.category === "financeiro").sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt));
-              return f.length ? (
+              const f = visible
+                .filter((i) => i.category === "financeiro" && i.inInbox !== false)
+                .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt));
+              if (!f.length) return <span className="text-sm">Nenhuma cobrança por aqui.</span>;
+              const fin = extractFinance(`${f[0].subject} ${decodeEntities(f[0].snippet)}`);
+              return (
                 <>
-                  <span className="font-display text-xl font-bold leading-tight">{f[0].subject}</span>
-                  <span className="text-sm">{senderInfo(f[0].sender).nome} · {f[0].when}{f.length > 1 ? ` · +${f.length - 1}` : ""}</span>
+                  <span className={`font-display font-bold leading-tight ${fin.valor ? "text-3xl tabular-nums" : "text-xl"}`}>
+                    {fin.valor ?? f[0].subject}
+                  </span>
+                  <span className="text-sm">
+                    {senderInfo(f[0].sender).nome} · {fin.vencimento ? `vence ${fin.vencimento}` : f[0].when}
+                    {f.length > 1 ? ` · +${f.length - 1}` : ""}
+                  </span>
                   <button type="button" onClick={() => setFiltro("financeiro")} className="mt-auto min-h-11 rounded-2xl px-4 text-sm font-bold" style={{ background: "var(--kt-financeiro)", color: "var(--k-financeiro)" }}>
                     Ver financeiro
                   </button>
                 </>
-              ) : (
-                <span className="text-sm">Nenhuma cobrança por aqui.</span>
               );
             })()}
           </section>

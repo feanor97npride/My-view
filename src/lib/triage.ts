@@ -32,24 +32,57 @@ export function senderInfo(raw: string): { nome: string; email: string; dominio:
   return { nome, email, dominio: email.split("@")[1] ?? "" };
 }
 
-// Lower comes first. Phase 1 has no due dates yet, so the order is Ação, Financeiro, Agendamento, then Trabalho, Pessoal.
+// "R$ 1.482,90" and "vence 25/11" extracted from subject/snippet without extra API calls.
+export function extractFinance(text: string): { valor?: string; vencimento?: string } {
+  const val = text.match(/R\$\s*([\d.]+,\d{2})/i);
+  const dueDate = text.match(/venc(?:e|imento)?(?:\s+em|\s*[:\-])?\s*(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
+  const dueWord = text.match(/vence\s+(hoje|amanh[aã])/i);
+  return {
+    valor: val ? `R$ ${val[1]}` : undefined,
+    vencimento: dueDate ? dueDate[1] : dueWord ? dueWord[1].toLowerCase() : undefined,
+  };
+}
+
+export function financeDueDays(vencimento: string | undefined, now: Date): number | null {
+  if (!vencimento) return null;
+  if (vencimento === "hoje") return 0;
+  if (vencimento.startsWith("amanh")) return 1;
+  const m = vencimento.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  const year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : now.getFullYear();
+  const target = Date.UTC(year, month, day);
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((target - today) / 86_400_000);
+}
+
+// Lower comes first: urgent Financeiro (<= 3 days) -> Ação -> Financeiro -> Agendamento -> Trabalho -> Pessoal.
 const RANK: Record<string, number> = { acao: 0, financeiro: 1, agendamento: 2, trabalho: 3, pessoal: 4 };
+
+const rankOf = (i: TriItem, now: Date) => {
+  if (i.category === "financeiro") {
+    const d = financeDueDays(extractFinance(`${i.subject} ${i.snippet}`).vencimento, now);
+    if (d !== null && d <= 3 && d >= -7) return -1;
+  }
+  return RANK[i.category] ?? 9;
+};
 
 const byAge = (a: TriItem, b: TriItem) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt); // oldest waits longest
 const isPending = (i: TriItem) => i.unread && i.inInbox !== false && !i.triado;
 
 // Order of the card in focus. With a queue filter: that category still in inbox, unread first. Without: unread in inbox only,
-// important categories first, then Trabalho and Pessoal. Informativo never enters the default queue.
-export function buildQueue(items: TriItem[], filtro: Fila | null): TriItem[] {
+// urgent financeiro & important categories first, then Trabalho and Pessoal. Informativo never enters the default queue.
+export function buildQueue(items: TriItem[], filtro: Fila | null, now = new Date()): TriItem[] {
   if (filtro && filtro !== "aguardando") {
     return items
       .filter((i) => i.category === filtro && i.inInbox !== false)
-      .sort((a, b) => Number(b.unread) - Number(a.unread) || (RANK[a.category] ?? 9) - (RANK[b.category] ?? 9) || byAge(a, b));
+      .sort((a, b) => Number(b.unread) - Number(a.unread) || rankOf(a, now) - rankOf(b, now) || byAge(a, b));
   }
   if (filtro === "aguardando") return [];
   return items
     .filter((i) => isPending(i) && i.category in RANK)
-    .sort((a, b) => RANK[a.category] - RANK[b.category] || byAge(a, b));
+    .sort((a, b) => rankOf(a, now) - rankOf(b, now) || byAge(a, b));
 }
 
 export type Resumo = {
