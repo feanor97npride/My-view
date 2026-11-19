@@ -697,11 +697,43 @@ export default function TriageBoard({
                       ))}
                     </select>
                   </span>
-                  <span className="text-xs text-mute">
-                    {focus.when}
-                    {focus.unread ? " · não lido" : ""}
-                    {queue.length > 1 && ` · ${idx + 1} de ${queue.length}`}
-                  </span>
+                  <div className="flex items-center gap-2 text-xs text-mute">
+                    <span>
+                      {focus.when}
+                      {focus.unread ? " · não lido" : ""}
+                      {queue.length > 1 && ` · ${idx + 1} de ${queue.length}`}
+                    </span>
+                    {queue.length > 1 && (
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSched(null);
+                            setActionError(null);
+                            setFocusId(queue[(idx - 1 + queue.length) % queue.length].id);
+                          }}
+                          title="E-mail anterior (K)"
+                          aria-label="E-mail anterior"
+                          className="btn spring-btn flex h-8 w-8 items-center justify-center p-0 text-base leading-none"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSched(null);
+                            setActionError(null);
+                            setFocusId(queue[(idx + 1) % queue.length].id);
+                          }}
+                          title="Próximo e-mail (J)"
+                          aria-label="Próximo e-mail"
+                          className="btn spring-btn flex h-8 w-8 items-center justify-center p-0 text-base leading-none"
+                        >
+                          ›
+                        </button>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Avatar name={senderInfo(focus.sender).nome} cat={filaOf(focus.category)} size={48} />
