@@ -21,32 +21,33 @@ export const metadata = { title: "Hoje" };
 
 export default async function Home() {
   const session = await auth();
-  const selected = await getSelectedCalendars().catch(() => null);
-  const windowMin = await getMeetingWindow().catch(() => 30);
-  const planPrefs = await getPlanPrefs().catch(() => DEFAULT_PLAN);
-  const today = session?.accessToken ? await timeline(session.accessToken, new Date(), 1, selected) : null;
-  // shortcut: a ClickUp or Gmail failure shows a note instead of breaking the rest of the page
-  const tasks = await openTasks().catch((e: Error) => e);
-  const mail = session?.accessToken ? await syncEmails(session.accessToken).catch((e: Error) => e) : null;
-  const awaitingDays = await getAwaitingDays().catch(() => 2);
-  const waiting =
-    session?.accessToken && session.user?.email
-      ? await awaitingReply(session.accessToken, session.user.email, awaitingDays).catch(() => null)
-      : null;
+  const token = session?.accessToken;
+  const email = session?.user?.email;
 
-  const statuses: Record<string, string[]> = {};
-  if (Array.isArray(tasks)) {
-    const ids = [...new Set(tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today").map((t) => t.listId).filter(Boolean))];
-    await Promise.all(
-      ids.map(async (id) => {
-        statuses[id] = (await cachedListStatuses(id).catch(() => [])).map((x) => x.status);
-      }),
-    );
-  }
+  // Rodada 1: preferências, tarefas e e-mails em paralelo (sem waterfall sequencial)
+  const [selected, windowMin, planPrefs, awaitingDays, tasks, mail] = await Promise.all([
+    getSelectedCalendars().catch(() => null),
+    getMeetingWindow().catch(() => 30),
+    getPlanPrefs().catch(() => DEFAULT_PLAN),
+    getAwaitingDays().catch(() => 2),
+    openTasks().catch((e: Error) => e),
+    token ? syncEmails(token).catch((e: Error) => e) : Promise.resolve(null),
+  ]);
 
-  const origins = Array.isArray(tasks)
-    ? await originsByTask(tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today").map((t) => t.id)).catch(() => ({}) as Awaited<ReturnType<typeof originsByTask>>)
-    : {};
+  const urgentRaw = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today") : [];
+  const listIds = [...new Set(urgentRaw.map((t) => t.listId).filter(Boolean))];
+  const urgentIds = urgentRaw.map((t) => t.id);
+
+  // Rodada 2: timeline (depende de selected), waiting (depende de awaitingDays), statuses e origins (dependem de tasks)
+  const [today, waiting, origins, ...statusEntries] = await Promise.all([
+    token ? timeline(token, new Date(), 1, selected) : Promise.resolve(null),
+    token && email ? awaitingReply(token, email, awaitingDays).catch(() => null) : Promise.resolve(null),
+    urgentIds.length > 0
+      ? originsByTask(urgentIds).catch(() => ({}) as Awaited<ReturnType<typeof originsByTask>>)
+      : Promise.resolve({} as Awaited<ReturnType<typeof originsByTask>>),
+    ...listIds.map(async (id) => [id, (await cachedListStatuses(id).catch(() => [])).map((x) => x.status)] as const),
+  ]);
+  const statuses: Record<string, string[]> = Object.fromEntries(statusEntries);
 
   const now = new Date();
   const tz = today?.tz ?? "UTC";

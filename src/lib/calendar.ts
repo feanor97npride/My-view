@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
 
 // Read-only Google Calendar access for "today" (no SDK: plain REST keeps the dependency count down).
 const API = "https://www.googleapis.com/calendar/v3";
@@ -65,13 +66,13 @@ async function get<T>(path: string, token: string): Promise<T> {
 
 export type CalendarInfo = { id: string; name: string; primary: boolean };
 
-export async function listCalendars(token: string): Promise<CalendarInfo[]> {
+export const listCalendars = cache(async (token: string): Promise<CalendarInfo[]> => {
   const { items } = await get<{ items: { id: string; summary: string; summaryOverride?: string; primary?: boolean }[] }>(
     "/users/me/calendarList",
     token,
   );
   return items.map((c) => ({ id: c.id, name: c.summaryOverride ?? c.summary, primary: !!c.primary }));
-}
+});
 
 // Calendars to show: the chosen ones that still exist, or all when no valid choice is saved.
 export function pickCalendars<T extends { id: string }>(all: T[], selected: string[] | null | undefined): T[] {
@@ -79,10 +80,10 @@ export function pickCalendars<T extends { id: string }>(all: T[], selected: stri
   return chosen.length ? chosen : all;
 }
 
-export async function primaryTz(token: string): Promise<string> {
+export const primaryTz = cache(async (token: string): Promise<string> => {
   const { items } = await get<{ items: { primary?: boolean; timeZone?: string }[] }>("/users/me/calendarList", token);
   return items.find((c) => c.primary)?.timeZone ?? "UTC";
-}
+});
 
 // Hours covered by timed events, counting overlaps once.
 export function busyHours(events: CalEvent[]): number {

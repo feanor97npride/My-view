@@ -41,13 +41,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   const name = session?.user?.name ?? "Usuário";
   // badge is optional: a database failure just hides it
-  const [mailCount, taskCount] = await Promise.all([unreadActionCount().catch(() => 0), urgentTasksCount().catch(() => 0)]);
-  const windowMin = await getMeetingWindow().catch(() => 30);
-  const selected = await getSelectedCalendars().catch(() => null);
-  const [meetings, tz] = await Promise.all([
-    session?.accessToken ? upcomingTimed(session.accessToken, selected).catch(() => []) : Promise.resolve([]),
+  const [mailCount, taskCount, windowMin, selected, tz] = await Promise.all([
+    unreadActionCount().catch(() => 0),
+    urgentTasksCount().catch(() => 0),
+    getMeetingWindow().catch(() => 30),
+    getSelectedCalendars().catch(() => null),
     session?.accessToken ? primaryTz(session.accessToken).catch(() => "UTC") : Promise.resolve("UTC"),
   ]);
+  const meetings = session?.accessToken ? await upcomingTimed(session.accessToken, selected).catch(() => []) : [];
   const badges: Record<string, number> = { "/": taskCount, "/emails": mailCount };
 
   const nowMs = Date.now();

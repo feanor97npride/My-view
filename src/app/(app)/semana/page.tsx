@@ -20,13 +20,12 @@ function parseHours(hhmm: string): number {
 
 export default async function Semana() {
   const session = await auth();
-  const [selected, planPrefs] = await Promise.all([
+  const [selected, planPrefs, tasks] = await Promise.all([
     getSelectedCalendars().catch(() => null),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
+    openTasks().catch((e: Error) => e),
   ]);
   const week = session?.accessToken ? await timeline(session.accessToken, new Date(), 7, selected) : null;
-  // shortcut: a ClickUp failure shows a note instead of breaking the calendar view
-  const tasks = await openTasks().catch((e: Error) => e);
 
   if (!week) {
     return (

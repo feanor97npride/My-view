@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
 
 // Read-only ClickUp tasks from the lists the owner picked (ids from the workspace hierarchy).
 const API = "https://api.clickup.com/api/v2";
@@ -94,8 +95,20 @@ async function fetchLists(query: string): Promise<RawTask[]> {
   return all.flat();
 }
 
-export async function openTasks(now = new Date()): Promise<Task[]> {
-  return (await fetchLists("include_closed=false"))
+const cachedOpenRaw = unstable_cache(
+  () => fetchLists("include_closed=false"),
+  ["clickup-open-raw"],
+  { revalidate: 60, tags: ["tasks"] },
+);
+
+const cachedDoneRaw = unstable_cache(
+  (since: number) => fetchLists(`include_closed=true&date_done_gt=${since}`),
+  ["clickup-done-raw"],
+  { revalidate: 120, tags: ["tasks"] },
+);
+
+export const openTasks = cache(async (now = new Date()): Promise<Task[]> => {
+  return (await cachedOpenRaw())
     .filter((t) => !isClosed(t))
     .map((t) => {
       const due = t.due_date ? new Date(Number(t.due_date)) : null;
@@ -113,7 +126,7 @@ export async function openTasks(now = new Date()): Promise<Task[]> {
       };
     })
     .sort((a, b) => (a.due?.getTime() ?? Infinity) - (b.due?.getTime() ?? Infinity));
-}
+});
 
 // Overdue plus due-today tasks, cached for 60 s so the menu badge does not hit ClickUp on every page.
 export const urgentTasksCount = unstable_cache(
@@ -123,12 +136,14 @@ export const urgentTasksCount = unstable_cache(
 );
 
 // When tasks were completed during the last `days` days.
-export async function completedDates(days = 14, now = new Date()): Promise<Date[]> {
-  const since = now.getTime() - days * 86_400_000;
-  return (await fetchLists(`include_closed=true&date_done_gt=${since}`))
+export const completedDates = cache(async (days = 14, now = new Date()): Promise<Date[]> => {
+  // Bucket timestamp to the hour so cache keys stay stable across requests within the same hour.
+  const hourBucket = Math.floor(now.getTime() / 3_600_000) * 3_600_000;
+  const since = hourBucket - days * 86_400_000;
+  return (await cachedDoneRaw(since))
     .filter((t) => isClosed(t) && t.date_done)
     .map((t) => new Date(Number(t.date_done)));
-}
+});
 
 export async function createClickupTask(listId: string, input: { name: string; description: string }): Promise<{ id: string; url: string }> {
   const token = process.env.CLICKUP_API_TOKEN;
