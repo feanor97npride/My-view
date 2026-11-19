@@ -175,12 +175,19 @@ export const completedDates = cache(async (days = 14, now = new Date()): Promise
     .map((t) => new Date(Number(t.date_done)));
 });
 
-export async function createClickupTask(listId: string, input: { name: string; description: string }): Promise<{ id: string; url: string }> {
+export async function createClickupTask(
+  listId: string,
+  input: { name: string; description: string; dueMs?: number | null },
+): Promise<{ id: string; url: string }> {
   const { token } = await requireClickup();
   const res = await fetch(`${API}/list/${encodeURIComponent(normalizeClickupList(listId))}/task`, {
     method: "POST",
     headers: { Authorization: token, "Content-Type": "application/json" },
-    body: JSON.stringify({ name: input.name, description: input.description }),
+    body: JSON.stringify({
+      name: input.name,
+      description: input.description,
+      ...(typeof input.dueMs === "number" ? { due_date: input.dueMs, due_date_time: false } : {}),
+    }),
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);

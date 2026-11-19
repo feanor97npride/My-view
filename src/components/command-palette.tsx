@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { startFocusTimer } from "@/lib/focus-timer";
 
 type Command = {
   id: string;
@@ -51,25 +52,54 @@ export function CommandTrigger({ compact = false }: { compact?: boolean }) {
 export default function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"search" | "new-task">("search");
   const [query, setQuery] = useState("");
   const [idx, setIdx] = useState(0);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDue, setTaskDue] = useState<"today" | "tomorrow" | "none">("today");
+  const [saving, setSaving] = useState(false);
+  const [taskError, setTaskError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const taskInputRef = useRef<HTMLInputElement>(null);
 
   const commands: Command[] = useMemo(
     () => [
-      { id: "hoje", label: "Ir para Hoje", group: "Navegação", keywords: "inicio cockpit agenda tarefas", run: () => router.push("/") },
-      { id: "semana", label: "Ir para Semana", group: "Navegação", keywords: "calendario carga dias", run: () => router.push("/semana") },
-      { id: "emails", label: "Ir para E-mails", group: "Navegação", keywords: "triagem inbox gmail", run: () => router.push("/emails") },
-      { id: "emails-acao", label: "E-mails: Fila Ação", group: "E-mails", keywords: "urgente responder", run: () => router.push("/emails?categoria=acao") },
-      { id: "emails-fin", label: "E-mails: Fila Financeiro", group: "E-mails", keywords: "boletos contas pagar", run: () => router.push("/emails?categoria=financeiro") },
-      { id: "indicadores", label: "Ir para Indicadores", group: "Navegação", keywords: "metricas grafico saude", run: () => router.push("/indicadores") },
-      { id: "config", label: "Ir para Configurações", group: "Navegação", keywords: "preferencias regras clickup", run: () => router.push("/configuracoes") },
+      {
+        id: "new-task",
+        label: "+ Nova tarefa rápida (ClickUp)",
+        group: "Produtividade",
+        keywords: "criar adicionar tarefa clickup rapida",
+        run: () => {
+          setTaskTitle(query.startsWith("+") ? query.slice(1).trim() : "");
+          setTaskError(null);
+          setMode("new-task");
+          setTimeout(() => taskInputRef.current?.focus(), 10);
+        },
+      },
+      {
+        id: "focus-25",
+        label: "▶ Iniciar foco de 25 min",
+        group: "Produtividade",
+        keywords: "pomodoro timer foco concentracao",
+        run: () => {
+          setOpen(false);
+          startFocusTimer({ title: query.trim() || "Sessão de foco", minutes: 25 });
+        },
+      },
+      { id: "hoje", label: "Ir para Hoje", group: "Navegação", keywords: "inicio cockpit agenda tarefas", run: () => { setOpen(false); router.push("/"); } },
+      { id: "semana", label: "Ir para Semana", group: "Navegação", keywords: "calendario carga dias", run: () => { setOpen(false); router.push("/semana"); } },
+      { id: "emails", label: "Ir para E-mails", group: "Navegação", keywords: "triagem inbox gmail", run: () => { setOpen(false); router.push("/emails"); } },
+      { id: "emails-acao", label: "E-mails: Fila Ação", group: "E-mails", keywords: "urgente responder", run: () => { setOpen(false); router.push("/emails?categoria=acao"); } },
+      { id: "emails-fin", label: "E-mails: Fila Financeiro", group: "E-mails", keywords: "boletos contas pagar", run: () => { setOpen(false); router.push("/emails?categoria=financeiro"); } },
+      { id: "indicadores", label: "Ir para Indicadores", group: "Navegação", keywords: "metricas grafico saude", run: () => { setOpen(false); router.push("/indicadores"); } },
+      { id: "config", label: "Ir para Configurações", group: "Navegação", keywords: "preferencias regras clickup", run: () => { setOpen(false); router.push("/configuracoes"); } },
       {
         id: "tema",
         label: "Alternar tema Claro / Escuro",
         group: "Interface",
         keywords: "dark light mode aparencia",
         run: () => {
+          setOpen(false);
           const root = document.documentElement;
           const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
           if (next === "dark") root.setAttribute("data-theme", "dark");
@@ -82,12 +112,13 @@ export default function CommandPalette() {
         },
       },
     ],
-    [router],
+    [query, router],
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands;
+    if (q.startsWith("+")) return commands.filter((c) => c.id === "new-task");
     return commands.filter(
       (c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q) || (c.keywords?.includes(q) ?? false),
     );
@@ -113,17 +144,39 @@ export default function CommandPalette() {
 
   useEffect(() => {
     if (open) {
+      setMode("search");
       setQuery("");
       setIdx(0);
+      setTaskError(null);
       setTimeout(() => inputRef.current?.focus(), 10);
     }
   }, [open]);
 
   if (!open) return null;
 
-  const pick = (cmd: Command) => {
-    setOpen(false);
-    cmd.run();
+  const createTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskTitle.trim() || saving) return;
+    setSaving(true);
+    setTaskError(null);
+    try {
+      const res = await fetch("/api/tasks/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", title: taskTitle.trim(), due: taskDue }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setTaskError(j.error ?? `Erro ${res.status}`);
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    } catch {
+      setTaskError("Falha de conexão ao criar tarefa.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -138,58 +191,113 @@ export default function CommandPalette() {
         className="toast-enter w-full max-w-lg overflow-hidden rounded-[22px] border border-line-strong bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-mute" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setIdx(0);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setIdx((i) => (filtered.length ? (i + 1) % filtered.length : 0));
-              } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setIdx((i) => (filtered.length ? (i - 1 + filtered.length) % filtered.length : 0));
-              } else if (e.key === "Enter" && filtered[idx]) {
-                e.preventDefault();
-                pick(filtered[idx]);
-              }
-            }}
-            placeholder="Ir para tela, fila de e-mail ou ação…"
-            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-mute"
-          />
-          <kbd className="rounded-md border border-line px-1.5 py-0.5 text-[10px] text-mute">ESC</kbd>
-        </div>
+        {mode === "new-task" ? (
+          <form onSubmit={createTask} className="flex flex-col gap-3 p-4">
+            <div className="flex items-center justify-between">
+              <span className="font-display text-sm font-bold text-ink">Nova tarefa rápida (ClickUp)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("search");
+                  setTimeout(() => inputRef.current?.focus(), 10);
+                }}
+                className="btn min-h-7 px-2 py-0.5 text-xs"
+              >
+                Voltar
+              </button>
+            </div>
+            <input
+              ref={taskInputRef}
+              type="text"
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              placeholder="Ex: Revisar proposta comercial…"
+              required
+              className="w-full rounded-xl border border-line-strong bg-bg px-3 py-2.5 text-sm text-ink outline-none focus:border-primary"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                {(
+                  [
+                    ["today", "Hoje"],
+                    ["tomorrow", "Amanhã"],
+                    ["none", "Sem prazo"],
+                  ] as const
+                ).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setTaskDue(val)}
+                    className={`chip cursor-pointer border text-xs ${
+                      taskDue === val ? "chip-primary border-primary" : "border-line bg-bg text-mute"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button type="submit" disabled={saving || !taskTitle.trim()} className="btn btn-primary spring-btn min-h-9 px-4 py-1.5 text-xs disabled:opacity-50">
+                {saving ? "Criando…" : "Criar tarefa"}
+              </button>
+            </div>
+            {taskError && <p className="m-0 text-xs" style={{ color: "var(--red-fg)" }}>{taskError}</p>}
+          </form>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-mute" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setIdx(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setIdx((i) => (filtered.length ? (i + 1) % filtered.length : 0));
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setIdx((i) => (filtered.length ? (i - 1 + filtered.length) % filtered.length : 0));
+                  } else if (e.key === "Enter" && filtered[idx]) {
+                    e.preventDefault();
+                    filtered[idx].run();
+                  }
+                }}
+                placeholder="Buscar tela, ação ou digite + para criar tarefa…"
+                className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-mute"
+              />
+              <kbd className="rounded-md border border-line px-1.5 py-0.5 text-[10px] text-mute">ESC</kbd>
+            </div>
 
-        <ul className="m-0 max-h-72 list-none overflow-y-auto p-2">
-          {filtered.length === 0 ? (
-            <li className="px-3 py-6 text-center text-sm text-mute">Nenhum comando encontrado.</li>
-          ) : (
-            filtered.map((cmd, i) => (
-              <li key={cmd.id}>
-                <button
-                  type="button"
-                  onClick={() => pick(cmd)}
-                  onMouseEnter={() => setIdx(i)}
-                  className={`flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
-                    i === idx ? "bg-primary-soft font-semibold text-primary-ink" : "text-ink hover:bg-primary-soft/50"
-                  }`}
-                >
-                  <span>{cmd.label}</span>
-                  <span className="text-[11px] font-normal text-mute">{cmd.group}</span>
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
+            <ul className="m-0 max-h-72 list-none overflow-y-auto p-2">
+              {filtered.length === 0 ? (
+                <li className="px-3 py-6 text-center text-sm text-mute">Nenhum comando encontrado.</li>
+              ) : (
+                filtered.map((cmd, i) => (
+                  <li key={cmd.id}>
+                    <button
+                      type="button"
+                      onClick={() => cmd.run()}
+                      onMouseEnter={() => setIdx(i)}
+                      className={`flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+                        i === idx ? "bg-primary-soft font-semibold text-primary-ink" : "text-ink hover:bg-primary-soft/50"
+                      }`}
+                    >
+                      <span>{cmd.label}</span>
+                      <span className="text-[11px] font-normal text-mute">{cmd.group}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </>
+        )}
       </div>
     </div>
   );

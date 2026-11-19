@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ActionToast, BentoCard, type ToastAction } from "@/components/ui";
+import { startFocusTimer } from "@/lib/focus-timer";
 
 export type PlanItem = {
   id: string;
@@ -155,14 +156,24 @@ export default function DayPlan({
                   <span className="truncate font-semibold">{it.title}</span>
                 )}
               </span>
-              <button
-                type="button"
-                disabled={done || busy.has(it.id)}
-                onClick={() => reserve([it])}
-                className="btn spring-btn min-h-9 shrink-0 px-3 py-1 text-[13px] disabled:opacity-60"
-              >
-                {done ? "Reservado ✓" : busy.has(it.id) ? "Reservando…" : "Reservar na agenda"}
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => startFocusTimer({ title: it.title, minutes: it.minutes })}
+                  title={`Iniciar foco de ${it.minutes} min`}
+                  className="btn spring-btn min-h-9 px-2.5 py-1 text-[13px]"
+                >
+                  ▶ Focar
+                </button>
+                <button
+                  type="button"
+                  disabled={done || busy.has(it.id)}
+                  onClick={() => reserve([it])}
+                  className="btn spring-btn min-h-9 shrink-0 px-3 py-1 text-[13px] disabled:opacity-60"
+                >
+                  {done ? "Reservado ✓" : busy.has(it.id) ? "Reservando…" : "Reservar na agenda"}
+                </button>
+              </div>
             </li>
           );
         })}

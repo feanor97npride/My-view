@@ -18,6 +18,7 @@ const CLICKUP_LIST = "default_clickup_list";
 const CLICKUP_TOKEN = "clickup_token";
 const KEYBOARD_SHORTCUTS = "keyboard_shortcuts";
 const DAY_PLAN = "day_plan";
+const QUICK_NOTES = "quick_notes";
 
 function primaryAllowedEmail(): string | null {
   const raw = process.env.ALLOWED_EMAILS?.trim() || process.env.ALLOWED_EMAIL?.trim() || "";
@@ -158,4 +159,13 @@ export async function getPlanPrefs(): Promise<PlanPrefs> {
 
 export async function setPlanPrefs(prefs: Partial<PlanPrefs>): Promise<void> {
   await upsertPref(DAY_PLAN, normalizePlanPrefs(prefs));
+}
+
+export async function getQuickNotes(): Promise<string> {
+  const map = await loadPrefsMap();
+  return typeof map[QUICK_NOTES] === "string" ? map[QUICK_NOTES] : "";
+}
+
+export async function setQuickNotes(text: string): Promise<void> {
+  await upsertPref(QUICK_NOTES, text.slice(0, 10_000));
 }

@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import DayPlan from "@/components/day-plan";
 import DayRing from "@/components/day-ring";
 import LiveMeeting from "@/components/live-meeting";
+import QuickNotes from "@/components/quick-notes";
 import Reconnect from "@/components/reconnect";
 import RefreshButton from "@/components/refresh-button";
 import RetryNotice from "@/components/retry-notice";
@@ -13,7 +14,7 @@ import { staticAlerts, summarize } from "@/lib/day-summary";
 import { gmailThreadUrl } from "@/lib/email-view";
 import { originsByTask } from "@/lib/links";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
-import { getAwaitingDays, getMeetingWindow, getPlanPrefs, getSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getMeetingWindow, getPlanPrefs, getQuickNotes, getSelectedCalendars } from "@/lib/prefs";
 import { DEFAULT_PLAN, dayKey, freeBlocks, planOverdue, scoreTask, suggestPlan, zonedMs, type Candidate } from "@/lib/task-dates";
 import { extractFinance, filaOf, financeDueDays } from "@/lib/triage";
 
@@ -25,11 +26,12 @@ export default async function Home() {
   const email = session?.user?.email;
 
   // Rodada 1: preferências, tarefas e e-mails em paralelo (sem waterfall sequencial)
-  const [selected, windowMin, planPrefs, awaitingDays, tasks, mail] = await Promise.all([
+  const [selected, windowMin, planPrefs, awaitingDays, quickNotes, tasks, mail] = await Promise.all([
     getSelectedCalendars().catch(() => null),
     getMeetingWindow().catch(() => 30),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
     getAwaitingDays().catch(() => 2),
+    getQuickNotes().catch(() => ""),
     openTasks().catch((e: Error) => e),
     token ? syncEmails(token).catch((e: Error) => e) : Promise.resolve(null),
   ]);
@@ -244,13 +246,14 @@ export default async function Home() {
             replan={replan}
           />
         </div>
-        <div className="min-w-0 lg:col-span-5">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
           <DayPlan
             items={planItems}
             unplaced={placed.unplaced.map((c) => c.title)}
             note={planNote}
             freeLabel={`${freeMin >= 60 ? `${Math.floor(freeMin / 60)}h${freeMin % 60 ? ` ${freeMin % 60}min` : ""}` : `${freeMin} min`} livres no expediente (${planPrefs.start}–${planPrefs.end})`}
           />
+          <QuickNotes initialText={quickNotes} />
         </div>
       </div>
 

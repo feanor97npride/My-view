@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ActionToast, BentoCard, type ToastAction } from "@/components/ui";
+import { startFocusTimer } from "@/lib/focus-timer";
 import RetryNotice from "@/components/retry-notice";
 
 export type TodayTask = {
@@ -176,6 +177,15 @@ export default function TodayTasks({
         <span className="flex flex-wrap items-center gap-2 pt-0.5">
           <button type="button" disabled={disabled} onClick={() => complete(t)} className="btn btn-primary spring-btn min-h-9 px-3.5 py-1 text-[13px] disabled:opacity-50">
             Concluir
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => startFocusTimer({ title: t.title, minutes: 25, taskId: t.id })}
+            title="Iniciar sessão de foco de 25 min para esta tarefa"
+            className="btn spring-btn min-h-9 px-3 py-1 text-[13px] disabled:opacity-50"
+          >
+            ▶ Focar 25m
           </button>
           <details className="relative">
             <summary className="btn min-h-9 list-none px-3 py-1 text-[13px] [&::-webkit-details-marker]:hidden">Adiar ▾</summary>

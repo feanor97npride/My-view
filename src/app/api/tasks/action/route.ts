@@ -2,11 +2,13 @@ import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { primaryTz } from "@/lib/calendar";
-import { closingStatus, getClickupTask, inScopeList, listStatuses, updateClickupTask } from "@/lib/clickup";
-import { dueForKey, isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
+import { closingStatus, createClickupTask, getClickupTask, inScopeList, listStatuses, updateClickupTask } from "@/lib/clickup";
+import { getDefaultClickupList } from "@/lib/prefs";
+import { dayKey, dueForKey, isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
 
 type Payload =
   | { action: "complete"; taskId: string }
+  | { action: "create"; title: string; due?: "today" | "tomorrow" | "none"; listId?: string }
   | { action: "setStatus"; taskId: string; status: string }
   | { action: "restoreStatus"; taskId: string; status: string }
   | { action: "postpone"; taskId: string; kind?: string; date?: string }
@@ -36,6 +38,27 @@ export async function POST(req: Request) {
   }
 
   try {
+    if (body.action === "create" && typeof body.title === "string") {
+      const title = body.title.trim();
+      if (!title) return NextResponse.json({ error: "Informe um título para a tarefa." }, { status: 400 });
+      const listId = body.listId?.trim() || (await getDefaultClickupList().catch(() => ""));
+      if (!listId) {
+        return NextResponse.json({ error: "Configure uma lista padrão em Configurações → ClickUp & Atalhos." }, { status: 400 });
+      }
+      let dueMs: number | null = null;
+      if (body.due === "today" || body.due === "tomorrow") {
+        const tz = await primaryTz(token).catch(() => "UTC");
+        const key = body.due === "today" ? dayKey(new Date(), tz) : postponeKey("tomorrow", new Date(), tz);
+        dueMs = dueForKey(key);
+      }
+      const created = await createClickupTask(listId, {
+        name: title.slice(0, 200),
+        description: "Criada pela captura rápida (My View)",
+        dueMs,
+      });
+      revalidateTag("tasks");
+      return NextResponse.json({ ok: true, id: created.id, url: created.url });
+    }
     if (body.action === "complete" && isId(body.taskId)) {
       const snap = await scoped(body.taskId);
       const closing = closingStatus(await listStatuses(snap.listId));
