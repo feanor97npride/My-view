@@ -175,7 +175,7 @@ export default async function Home() {
   const totalGoal = totalEvents + urgent.length;
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-5 p-4 md:p-10">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 p-4 md:px-8 md:py-8 xl:px-10">
       {/* Hero Bento: Saudação + Resumo/Alertas + 4 KPIs integrados + Anel do dia */}
       <section aria-label="Visão geral de hoje" className="spring-card spring-d1 grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="card bento-card flex flex-col justify-between gap-4 lg:col-span-8">

@@ -78,7 +78,7 @@ export default async function Semana() {
   const overdue = taskList.filter((t) => t.bucket === "overdue").length;
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:p-10">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 md:px-8 md:py-8 xl:px-10">
       <header className="spring-card spring-d1 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-mute">{rangeLabel(days[0], days[6])}</p>

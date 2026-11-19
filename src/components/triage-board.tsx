@@ -591,7 +591,7 @@ export default function TriageBoard({
   const neutral = { background: "var(--card)" };
 
   return (
-    <div ref={root} onKeyDown={onKeyDown} className="mx-auto flex max-w-[1120px] flex-col gap-[26px] p-4 md:px-12 md:pb-14 md:pt-10">
+    <div ref={root} onKeyDown={onKeyDown} className="mx-auto flex w-full max-w-[1600px] flex-col gap-[26px] p-4 md:px-8 md:pb-14 md:pt-8 xl:px-10">
       <p role="status" aria-live="polite" className="sr-only">{announce}</p>
 
       {/* 1 · Cabeçalho */}

@@ -435,7 +435,7 @@ export default async function Configuracoes({
   );
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-5 p-4 md:p-10">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:px-8 md:py-8 xl:px-10">
       <header>
         <p className="text-sm text-mute">Preferências</p>
         <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">Configurações</h1>

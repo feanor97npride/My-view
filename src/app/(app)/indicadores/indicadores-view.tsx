@@ -60,7 +60,7 @@ export default function IndicadoresView({
   const sortedMail = [...mailRows].sort((a, b) => b.value - a.value);
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:p-10">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 md:px-8 md:py-8 xl:px-10">
       {/* Cabeçalho + abas de foco */}
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>

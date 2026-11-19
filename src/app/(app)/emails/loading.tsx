@@ -1,7 +1,7 @@
 export default function Loading() {
   const block = "animate-pulse rounded-[20px] bg-line motion-reduce:animate-none";
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-5 p-4 md:p-10" aria-busy="true">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 p-4 md:px-8 md:py-8 xl:px-10" aria-busy="true">
       <p role="status" className="sr-only">Carregando e-mails…</p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className={`${block} h-10 w-56 rounded-xl`} />
