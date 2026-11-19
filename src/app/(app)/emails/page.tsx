@@ -6,7 +6,8 @@ import { primaryTz } from "@/lib/calendar";
 import { gmailThreadUrl, shortDate } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
 import { tasksByEmail } from "@/lib/links";
-import { getAwaitingDays, getKeyboardShortcutsEnabled } from "@/lib/prefs";
+import { getAwaitingDays, getKeyboardShortcutsEnabled, getSnoozedEmails } from "@/lib/prefs";
+import { dayKey } from "@/lib/task-dates";
 import { FILAS, type Fila, type TriItem } from "@/lib/triage";
 
 export const metadata = { title: "E-mails" };
@@ -26,9 +27,10 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
 
   const account = session.user?.email ?? "";
   const initialFila = (FILAS as readonly string[]).includes(params.categoria ?? "") ? (params.categoria as Fila) : null;
-  const [awaitingDays, shortcutsEnabled] = await Promise.all([
+  const [awaitingDays, shortcutsEnabled, snoozed] = await Promise.all([
     getAwaitingDays().catch(() => 2),
     getKeyboardShortcutsEnabled().catch(() => true),
+    getSnoozedEmails().catch(() => ({})),
   ]);
 
   // shortcut: a Gmail failure shows a banner instead of an error page
@@ -38,6 +40,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
     awaitingReply(token, account, awaitingDays).catch((e: Error) => e),
   ]);
   const now = new Date();
+  const todayKey = dayKey(now, tz);
   const taskOf = mail instanceof Error ? {} : await tasksByEmail(mail.emails.map((m) => m.id)).catch(() => ({}) as Record<string, string>);
 
   if (mail instanceof Error) {
@@ -83,6 +86,8 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
         awaitingDays={awaitingDays}
         initialFila={initialFila}
         shortcutsEnabled={shortcutsEnabled}
+        initialSnoozed={snoozed}
+        todayKey={todayKey}
       />
     </main>
   );

@@ -1,11 +1,13 @@
+import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createCalendarEvent, deleteCalendarEvent } from "@/lib/calendar";
+import { createCalendarEvent, deleteCalendarEvent, primaryTz } from "@/lib/calendar";
 import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
 import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
-import { archiveEmail, createFollowupDraft, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
+import { archiveEmail, createFollowupDraft, createReplyDraftWithAI, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
 import { deleteTaskOrigin, saveTaskOrigin } from "@/lib/links";
-import { getDefaultClickupList, getEmailRules, setEmailRules } from "@/lib/prefs";
+import { getDefaultClickupList, getEmailRules, getSnoozedEmails, setEmailRules, setSnoozedEmails } from "@/lib/prefs";
+import { isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
 
 type Payload =
   | { action: "archive" | "unarchive"; id: string }
@@ -15,7 +17,10 @@ type Payload =
   | { action: "task"; title: string; description: string; listId?: string; emailId?: string; threadId?: string }
   | { action: "untask"; taskId: string }
   | { action: "followup"; threadId: string; to: string; subject: string }
+  | { action: "aiDraft"; threadId: string; to: string; subject: string; snippet: string; tone?: "direto" | "formal" | "followup" }
   | { action: "unfollowup"; draftId: string }
+  | { action: "snooze"; emailId: string; kind?: string; date?: string }
+  | { action: "unsnooze"; emailId: string }
   | { action: "summarize"; items: { sender: string; subject: string; snippet: string }[] }
   | { action: "recategorize"; emailId: string; senderEmail: string; category: string }
   | { action: "unrecategorize"; emailId: string; senderEmail: string; previousCategory: string; hadRule?: string | null }
@@ -76,11 +81,13 @@ export async function POST(req: Request) {
       if (typeof body.emailId === "string" && body.emailId && typeof body.threadId === "string") {
         await saveTaskOrigin({ taskId: created.id, emailId: body.emailId, threadId: body.threadId, subject: body.title }).catch(() => {});
       }
+      revalidateTag("tasks");
       return NextResponse.json({ ok: true, taskId: created.id, url: created.url });
     }
     if (body.action === "untask" && typeof body.taskId === "string" && body.taskId) {
       await deleteClickupTask(body.taskId);
       await deleteTaskOrigin(body.taskId).catch(() => {});
+      revalidateTag("tasks");
       return NextResponse.json({ ok: true });
     }
     if (body.action === "followup" && typeof body.threadId === "string" && body.threadId) {
@@ -91,8 +98,32 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ ok: true, draftId: created.id });
     }
+    if (body.action === "aiDraft" && typeof body.threadId === "string" && body.threadId) {
+      const created = await createReplyDraftWithAI(token, {
+        threadId: body.threadId,
+        to: body.to ?? "",
+        subject: body.subject ?? "(sem assunto)",
+        snippet: body.snippet ?? "",
+        tone: body.tone,
+      });
+      return NextResponse.json({ ok: true, draftId: created.id, text: created.text });
+    }
     if (body.action === "unfollowup" && typeof body.draftId === "string" && body.draftId) {
       await deleteDraft(token, body.draftId);
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "snooze" && typeof body.emailId === "string" && body.emailId) {
+      const tz = await primaryTz(token).catch(() => "UTC");
+      const until = isDayKey(body.date) ? body.date : isPostpone(body.kind) ? postponeKey(body.kind, new Date(), tz) : postponeKey("tomorrow", new Date(), tz);
+      const current = await getSnoozedEmails().catch(() => ({}));
+      await setSnoozedEmails({ ...current, [body.emailId]: until });
+      return NextResponse.json({ ok: true, until });
+    }
+    if (body.action === "unsnooze" && typeof body.emailId === "string" && body.emailId) {
+      const current = await getSnoozedEmails().catch(() => ({}));
+      const next = { ...current };
+      delete next[body.emailId];
+      await setSnoozedEmails(next);
       return NextResponse.json({ ok: true });
     }
     if (body.action === "summarize" && Array.isArray(body.items)) {

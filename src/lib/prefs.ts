@@ -19,6 +19,7 @@ const CLICKUP_TOKEN = "clickup_token";
 const KEYBOARD_SHORTCUTS = "keyboard_shortcuts";
 const DAY_PLAN = "day_plan";
 const QUICK_NOTES = "quick_notes";
+const SNOOZED_EMAILS = "snoozed_emails";
 
 function primaryAllowedEmail(): string | null {
   const raw = process.env.ALLOWED_EMAILS?.trim() || process.env.ALLOWED_EMAIL?.trim() || "";
@@ -168,4 +169,19 @@ export async function getQuickNotes(): Promise<string> {
 
 export async function setQuickNotes(text: string): Promise<void> {
   await upsertPref(QUICK_NOTES, text.slice(0, 10_000));
+}
+
+export async function getSnoozedEmails(): Promise<Record<string, string>> {
+  const map = await loadPrefsMap();
+  const raw = map[SNOOZED_EMAILS];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) out[k] = v;
+  }
+  return out;
+}
+
+export async function setSnoozedEmails(next: Record<string, string>): Promise<void> {
+  await upsertPref(SNOOZED_EMAILS, next);
 }

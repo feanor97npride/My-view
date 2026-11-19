@@ -385,6 +385,63 @@ export async function deleteDraft(token: string, draftId: string): Promise<void>
   if (!res.ok && res.status !== 404) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
+export async function createReplyDraftWithAI(
+  token: string,
+  input: { threadId: string; to: string; subject: string; snippet: string; tone?: "direto" | "formal" | "followup" },
+): Promise<{ id: string; text: string }> {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key) throw new Error("ANTHROPIC_API_KEY não configurada");
+
+  const toneHint =
+    input.tone === "formal"
+      ? "tom formal, educado e corporativo"
+      : input.tone === "followup"
+        ? "tom de cobrança leve e cordial para retomar o assunto"
+        : "tom direto, claro e cordial";
+
+  const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    signal: AbortSignal.timeout(8000),
+    body: JSON.stringify({
+      model: "claude-haiku-5-5",
+      max_tokens: 600,
+      messages: [
+        {
+          role: "user",
+          content: `Escreva apenas o corpo de uma resposta curta em português (${toneHint}), sem linha de assunto nem explicações extras.\nRemetente original: ${input.to}\nAssunto: ${input.subject}\nTrecho: ${input.snippet.slice(0, 300)}`,
+        },
+      ],
+    }),
+    cache: "no-store",
+  });
+  if (!aiRes.ok) throw new Error(`Anthropic ${aiRes.status}`);
+  const aiJson = (await aiRes.json()) as { content?: { type: string; text?: string }[] };
+  const text = aiJson.content?.find((b) => b.type === "text")?.text?.trim();
+  if (!text) throw new Error("A IA não retornou um rascunho.");
+
+  const clean = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
+  const subject = /^re:/i.test(input.subject.trim()) ? clean(input.subject) : `Re: ${clean(input.subject)}`;
+  const lines = [
+    ...(input.to ? [`To: ${clean(input.to)}`] : []),
+    `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "",
+    ...text.split(/\r?\n/),
+  ];
+  const raw = Buffer.from(lines.join("\r\n"), "utf8").toString("base64url");
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: { threadId: input.threadId, raw } }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = (await res.json()) as { id: string };
+  return { id: j.id, text };
+}
+
 export async function summarizeInformativosWithAI(
   items: { sender: string; subject: string; snippet: string }[],
 ): Promise<string> {

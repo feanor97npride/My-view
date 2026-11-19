@@ -55,6 +55,8 @@ export default function TriageBoard({
   awaitingDays,
   initialFila,
   shortcutsEnabled = true,
+  initialSnoozed = {},
+  todayKey = "",
 }: {
   items: TriItem[];
   waiting: Waiting[] | null; // null = could not be read
@@ -63,9 +65,14 @@ export default function TriageBoard({
   awaitingDays: number;
   initialFila: Fila | null;
   shortcutsEnabled?: boolean;
+  initialSnoozed?: Record<string, string>;
+  todayKey?: string;
 }) {
   const [items, setItems] = useState<TriItem[]>(initialItems);
   useEffect(() => setItems(initialItems), [initialItems]);
+
+  const [snoozed, setSnoozed] = useState<Record<string, string>>(initialSnoozed);
+  useEffect(() => setSnoozed(initialSnoozed), [initialSnoozed]);
 
   const [filtro, setFiltro] = useState<Fila | null>(initialFila);
   const [q, setQ] = useState("");
@@ -76,14 +83,25 @@ export default function TriageBoard({
   const [toast, setToast] = useState<{ label: string; undo: () => void } | null>(null);
   const [sched, setSched] = useState<{ id: string; title: string; start: string; minutes: number } | null>(null);
   const [drafted, setDrafted] = useState<Record<string, boolean>>({});
+  const [aiDrafting, setAiDrafting] = useState(false);
+  const [aiDraftTone, setAiDraftTone] = useState<"direto" | "formal" | "followup">("direto");
+  const [aiDraftPreview, setAiDraftPreview] = useState<{ emailId: string; text: string } | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
 
-  const visible = useMemo(() => (q.trim() ? filterEmails(items, { q }) : items), [items, q]);
-  const resumo = useMemo(() => resumir(items), [items]); // the header always describes the whole window
+  const activeItems = useMemo(
+    () => items.filter((i) => !(snoozed[i.id] && (todayKey ? snoozed[i.id] > todayKey : true))),
+    [items, snoozed, todayKey],
+  );
+  const snoozedItems = useMemo(
+    () => items.filter((i) => !!(snoozed[i.id] && (todayKey ? snoozed[i.id] > todayKey : true))),
+    [items, snoozed, todayKey],
+  );
+  const visible = useMemo(() => (q.trim() ? filterEmails(activeItems, { q }) : activeItems), [activeItems, q]);
+  const resumo = useMemo(() => resumir(activeItems), [activeItems]); // the header always describes the whole window
   const queue = useMemo(() => buildQueue(visible, filtro), [visible, filtro]);
   const focus = queue.find((i) => i.id === focusId) ?? queue[0] ?? null;
   const idx = focus ? queue.indexOf(focus) : -1;
@@ -298,6 +316,81 @@ export default function TriageBoard({
         }
       });
     });
+  };
+
+  const aiDraftFocus = (item: TriItem, tone: "direto" | "formal" | "followup") => {
+    if (aiDrafting) return;
+    setActionError(null);
+    setAiDrafting(true);
+    const to = senderInfo(item.sender).email || item.sender;
+    void postAction<{ draftId?: string; text?: string }>({
+      action: "aiDraft",
+      threadId: item.threadId,
+      to,
+      subject: item.subject,
+      snippet: decodeEntities(item.snippet),
+      tone,
+    }).then((r) => {
+      setAiDrafting(false);
+      if (!r.ok) {
+        setActionError(r.error);
+        return;
+      }
+      if (r.data.text) setAiDraftPreview({ emailId: item.id, text: r.data.text });
+      const draftId = r.data.draftId;
+      showToast("Rascunho IA salvo no Gmail", () => {
+        setAiDraftPreview((cur) => (cur?.emailId === item.id ? null : cur));
+        if (draftId) {
+          void postAction({ action: "unfollowup", draftId }).then((u) => {
+            if (!u.ok) setActionError(u.error);
+          });
+        }
+      });
+    });
+  };
+
+  const snoozeFocus = (item: TriItem, kind: "tomorrow" | "monday") => {
+    setActionError(null);
+    setSched(null);
+    const nextItem = queue.find((i) => i.id !== item.id) ?? null;
+    const prevUntil = snoozed[item.id];
+    const optimisticUntil = "9999-12-31";
+    advanceWithMotion(() => {
+      setLeaving(false);
+      setSnoozed((prev) => ({ ...prev, [item.id]: optimisticUntil }));
+      setFocusId(nextItem?.id ?? null);
+      const undo = () => {
+        setSnoozed((prev) => {
+          const n = { ...prev };
+          if (prevUntil) n[item.id] = prevUntil;
+          else delete n[item.id];
+          return n;
+        });
+        setFocusId(item.id);
+        void postAction({ action: "unsnooze", emailId: item.id }).catch(() => {});
+      };
+      showToast(kind === "monday" ? "Adiado até segunda-feira" : "Adiado para amanhã", undo);
+      void postAction<{ until?: string }>({ action: "snooze", emailId: item.id, kind }).then((r) => {
+        if (!r.ok) {
+          setToast(null);
+          undo();
+          setActionError(r.error);
+          return;
+        }
+        if (r.data.until) {
+          setSnoozed((prev) => ({ ...prev, [item.id]: r.data.until! }));
+        }
+      });
+    });
+  };
+
+  const unsnoozeItem = (id: string) => {
+    setSnoozed((prev) => {
+      const n = { ...prev };
+      delete n[id];
+      return n;
+    });
+    void postAction({ action: "unsnooze", emailId: id }).catch(() => {});
   };
 
   const summarizeInformativos = () => {
@@ -628,6 +721,54 @@ export default function TriageBoard({
                     <span className="text-[11px] font-medium opacity-70">R</span>
                   </ExtLink>
                 </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line bg-bg px-3.5 py-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <select
+                      aria-label="Tom do rascunho"
+                      value={aiDraftTone}
+                      onChange={(e) => setAiDraftTone(e.target.value as "direto" | "formal" | "followup")}
+                      className="min-h-8 rounded-lg border border-line-strong bg-card px-2 text-xs text-ink"
+                    >
+                      <option value="direto">Tom: Direto</option>
+                      <option value="formal">Tom: Formal</option>
+                      <option value="followup">Tom: Follow-up</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={aiDrafting}
+                      onClick={() => aiDraftFocus(focus, aiDraftTone)}
+                      className="btn btn-primary spring-btn min-h-8 px-3 py-1 text-xs disabled:opacity-60"
+                    >
+                      {aiDrafting ? "Gerando rascunho…" : "✨ Rascunho IA"}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-mute">Soneca:</span>
+                    <button
+                      type="button"
+                      onClick={() => snoozeFocus(focus, "tomorrow")}
+                      className="btn spring-btn min-h-8 px-2.5 py-1 text-xs"
+                    >
+                      💤 Amanhã
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => snoozeFocus(focus, "monday")}
+                      className="btn spring-btn min-h-8 px-2.5 py-1 text-xs"
+                    >
+                      Segunda
+                    </button>
+                  </div>
+                </div>
+                {aiDraftPreview?.emailId === focus.id && (
+                  <div className="rounded-2xl border border-primary/30 bg-primary-soft/50 p-3.5 text-sm">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-primary-ink">Rascunho salvo no Gmail</span>
+                      <ExtLink href={focus.url} className="text-xs font-semibold">Abrir rascunho ↗</ExtLink>
+                    </div>
+                    <p className="m-0 whitespace-pre-wrap text-xs text-ink">{aiDraftPreview.text}</p>
+                  </div>
+                )}
                 {focus.clickupTaskId && focus.clickupTaskId !== "pending" && (
                   <p className="m-0 text-sm">
                     <ExtLink href={`https://app.clickup.com/t/${focus.clickupTaskId}`} className="font-semibold">Tarefa criada no ClickUp ↗</ExtLink>
@@ -698,6 +839,29 @@ export default function TriageBoard({
                 <p className="m-0 text-mute">Você leu todos os e-mails que pedem atenção. {plural(items.filter((i) => !i.unread).length, "e-mail lido", "e-mails lidos")} na janela.</p>
                 <a href="#leitura-leve" className="btn">Ir para a Leitura leve</a>
               </div>
+            )}
+            {snoozedItems.length > 0 && (
+              <details className="mt-4 border-t border-line pt-3">
+                <summary className="cursor-pointer text-xs font-semibold text-mute hover:text-ink">
+                  💤 Adiados ({snoozedItems.length})
+                </summary>
+                <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
+                  {snoozedItems.map((it) => (
+                    <li key={it.id} className="flex items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2 text-xs">
+                      <span className="min-w-0 flex-1 truncate font-medium text-ink">
+                        {it.subject} <span className="text-mute">· até {snoozed[it.id]?.split("-").reverse().slice(0, 2).join("/")}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => unsnoozeItem(it.id)}
+                        className="btn spring-btn min-h-7 shrink-0 px-2.5 py-0.5 text-[11px]"
+                      >
+                        Acordar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
           </div>
         </section>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import DayPlan from "@/components/day-plan";
 import DayRing from "@/components/day-ring";
+import HomeActionEmails from "@/components/home-action-emails";
 import LiveMeeting from "@/components/live-meeting";
 import QuickNotes from "@/components/quick-notes";
 import Reconnect from "@/components/reconnect";
@@ -306,30 +307,18 @@ export default async function Home() {
             {mail && !(mail instanceof Error) && <span className="text-[13px] text-mute">{actions.length} não lidos</span>}
           </div>
           {mail instanceof Error && <RetryNotice message={`Gmail indisponível: ${mail.message}`} />}
-          {mail && !(mail instanceof Error) && actions.length === 0 && <p className="text-mute">Nenhum e-mail de ação por ler.</p>}
-          <div className="flex flex-col gap-2.5">
-            {actions.slice(0, 3).map((m) => (
-              <a
-                key={m.id}
-                href={gmailThreadUrl(account, m.threadId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col gap-1.5 rounded-2xl p-3.5 text-ink no-underline transition-all hover:outline hover:outline-2 hover:outline-[var(--primary)]"
-                style={{ background: "var(--violet-bg)" }}
-              >
-                <span className="truncate text-[13px] text-mute">{m.sender}</span>
-                <span className="font-semibold">{m.subject}</span>
-                <span>
-                  <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
-                  <span className="sr-only"> Abre no Gmail, em nova aba</span>
-                </span>
-              </a>
-            ))}
-          </div>
-          {actions.length > 3 && (
-            <Link href="/emails?categoria=acao&naolidos=1" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold">
-              Ver os outros {actions.length - 3} e-mails de ação
-            </Link>
+          {mail && !(mail instanceof Error) && (
+            <HomeActionEmails
+              initialTotal={actions.length}
+              initialItems={actions.slice(0, 8).map((m) => ({
+                id: m.id,
+                threadId: m.threadId,
+                sender: m.sender,
+                subject: m.subject,
+                snippet: m.snippet,
+                url: gmailThreadUrl(account, m.threadId),
+              }))}
+            />
           )}
         </section>
       </div>
