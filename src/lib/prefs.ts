@@ -20,10 +20,10 @@ const KEYBOARD_SHORTCUTS = "keyboard_shortcuts";
 const DAY_PLAN = "day_plan";
 
 function primaryAllowedEmail(): string | null {
-  const raw = process.env.ALLOWED_EMAILS ?? process.env.ALLOWED_EMAIL ?? "";
+  const raw = process.env.ALLOWED_EMAILS?.trim() || process.env.ALLOWED_EMAIL?.trim() || "";
   const first = raw
     .split(/[\s,;]+/)
-    .map((s) => s.trim().toLowerCase())
+    .map((s) => s.replace(/^["']+|["']+$/g, "").trim().toLowerCase())
     .find((s) => s && s !== "*");
   return first ?? null;
 }

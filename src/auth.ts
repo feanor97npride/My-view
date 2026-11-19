@@ -17,7 +17,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   pages: { signIn: "/login" },
   callbacks: {
-    signIn: ({ profile }) => isAllowedEmail(profile, process.env.ALLOWED_EMAILS ?? process.env.ALLOWED_EMAIL),
+    signIn: ({ profile }) =>
+      isAllowedEmail(profile, process.env.ALLOWED_EMAILS?.trim() || process.env.ALLOWED_EMAIL?.trim()),
     async jwt({ token, account }) {
       if (account) {
         return {

@@ -7,7 +7,7 @@ export function isAllowedEmail(
   if (!profile?.email || profile.email_verified !== true || !allowed) return false;
   const list = allowed
     .split(/[\s,;]+/)
-    .map((s) => s.trim().toLowerCase())
+    .map((s) => s.replace(/^["']+|["']+$/g, "").trim().toLowerCase())
     .filter(Boolean);
   if (list.length === 0) return false;
   if (list.includes("*")) return true;
