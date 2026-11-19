@@ -5,6 +5,7 @@ import { busyHours, timeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
 import { getPlanPrefs, getSelectedCalendars } from "@/lib/prefs";
 import { DEFAULT_PLAN } from "@/lib/task-dates";
+import WeekBoard, { type WeekDay } from "./week-board";
 import WeekChart from "./week-chart";
 
 export const metadata = { title: "Semana" };
@@ -48,12 +49,31 @@ export default async function Semana() {
   const taskList = Array.isArray(tasks) ? tasks : [];
   const capacityHours = Math.max(1, parseHours(planPrefs.end) - parseHours(planPrefs.start));
 
-  const perDay = days.map((d) => {
+  const perDay: WeekDay[] = days.map((d) => {
     const k = key(d);
     const dayEvents = events.filter((e) => key(e.start) === k);
     const dayTasks = taskList.filter((t) => t.due && key(t.due) === k);
     const busy = busyHours(dayEvents);
-    return { d, k, isToday: k === todayKey, dayEvents, dayTasks, busy };
+    return {
+      key: k,
+      longLabel: longLabel(d),
+      isToday: k === todayKey,
+      busy,
+      events: dayEvents.map((e) => ({
+        id: e.id,
+        title: e.title,
+        allDay: e.allDay,
+        timeLabel: `${time(e.start)} – ${time(e.end)}`,
+        link: e.link,
+      })),
+      tasks: dayTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        list: t.list,
+        url: t.url,
+        dayKey: k,
+      })),
+    };
   });
   const overdue = taskList.filter((t) => t.bucket === "overdue").length;
 
@@ -76,8 +96,8 @@ export default async function Semana() {
         />
         <WeekChart
           capacityHours={capacityHours}
-          data={perDay.map((p) => ({
-            day: label(p.d),
+          data={perDay.map((p, idx) => ({
+            day: label(days[idx]),
             ocupado: p.busy,
             livre: Math.max(0, capacityHours - p.busy),
             isToday: p.isToday,
@@ -87,60 +107,7 @@ export default async function Semana() {
 
       {!Array.isArray(tasks) && <p className="text-sm text-mute">ClickUp indisponível: {tasks.message}</p>}
 
-      <section aria-label="Dias da semana" className="spring-card spring-d3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        {perDay.map((p) => (
-          <BentoCard
-            as="article"
-            key={p.k}
-            className={`flex flex-col gap-2.5 !p-4 ${
-              p.isToday ? "!border-2 !border-primary !bg-primary-soft/45" : ""
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                {p.isToday && <span className="chip chip-primary mb-1 px-2 py-0 text-[10px]">Hoje</span>}
-                <h3 className="font-display text-[16px] font-semibold capitalize leading-snug">{longLabel(p.d)}</h3>
-              </div>
-              <span className={`chip shrink-0 ${p.busy > capacityHours * 0.75 ? "chip-red" : p.busy > 0 ? "chip-blue" : "chip-slate"}`}>
-                {p.busy > 0 ? `${p.busy.toFixed(1).replace(".", ",")}h` : "livre"}
-              </span>
-            </div>
-
-            {p.dayEvents.length === 0 && p.dayTasks.length === 0 && (
-              <p className="mt-1 rounded-xl border border-dashed border-line px-3 py-2 text-xs text-mute">
-                Dia livre para foco.
-              </p>
-            )}
-
-            {p.dayEvents.map((e) => (
-              <p key={e.id} className="m-0 text-[13px] leading-snug">
-                <span className="tabular-nums text-mute">{e.allDay ? "Dia inteiro" : `${time(e.start)} – ${time(e.end)}`}</span>
-                <br />
-                {e.link ? (
-                  <a href={e.link} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
-                    {e.title}
-                    <span className="sr-only"> (abre no Google Agenda, em nova aba)</span>
-                  </a>
-                ) : (
-                  <span className="font-semibold">{e.title}</span>
-                )}
-              </p>
-            ))}
-
-            {p.dayTasks.map((t) => (
-              <p key={t.id} className="m-0 text-[13px] leading-snug">
-                <span className="chip chip-amber px-2 py-px text-[11px]">Prazo</span>
-                <br />
-                <a href={t.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
-                  {t.title}
-                  <span className="sr-only"> (abre no ClickUp, em nova aba)</span>
-                </a>
-                <span className="text-mute"> · {t.list}</span>
-              </p>
-            ))}
-          </BentoCard>
-        ))}
-      </section>
+      <WeekBoard initialDays={perDay} capacityHours={capacityHours} />
     </main>
   );
 }
