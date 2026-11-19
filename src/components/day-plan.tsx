@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ActionToast, BentoCard, type ToastAction } from "@/components/ui";
 
 export type PlanItem = {
   id: string;
@@ -49,7 +50,7 @@ export default function DayPlan({
   const [reserved, setReserved] = useState<Record<string, string>>({}); // item id -> calendar event id
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ label: string; undo: () => Promise<void> } | null>(null);
+  const [toast, setToast] = useState<ToastAction | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -109,7 +110,7 @@ export default function DayPlan({
   const pending = items.filter((i) => !reserved[i.id]);
 
   return (
-    <section aria-label="Plano do dia" className="card bento-card flex flex-col gap-3">
+    <BentoCard aria-label="Plano do dia" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="font-display text-xl font-semibold">Plano do dia</h2>
@@ -174,31 +175,7 @@ export default function DayPlan({
         </p>
       )}
 
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="toast-enter fixed bottom-24 right-4 z-30 overflow-hidden rounded-2xl border border-line-strong bg-card text-sm font-medium shadow-xl md:bottom-6 md:right-6"
-        >
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span>{toast.label}</span>
-            <button
-              type="button"
-              onClick={() => {
-                const undo = toast.undo;
-                setToast(null);
-                void undo();
-              }}
-              className="btn btn-primary spring-btn min-h-9 px-3 py-1 text-xs"
-            >
-              Desfazer
-            </button>
-          </div>
-          <div className="h-1 w-full bg-line">
-            <div key={toast.label} className="toast-bar h-full bg-primary" />
-          </div>
-        </div>
-      )}
-    </section>
+      <ActionToast toast={toast} onDismiss={() => setToast(null)} />
+    </BentoCard>
   );
 }

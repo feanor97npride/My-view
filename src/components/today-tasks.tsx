@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ActionToast, BentoCard, type ToastAction } from "@/components/ui";
 
 export type TodayTask = {
   id: string;
@@ -16,7 +17,7 @@ export type TodayTask = {
 
 type Statuses = Record<string, string[]>; // listId -> status names
 
-type Toast = { label: string; undo: () => Promise<void>; extra?: { label: string; run: () => Promise<void> } };
+type Toast = ToastAction;
 
 async function post<T extends Record<string, unknown> = Record<string, unknown>>(
   body: unknown,
@@ -257,7 +258,7 @@ export default function TodayTasks({
   };
 
   return (
-    <section className="card bento-card">
+    <BentoCard>
       <div className="mb-2 flex items-baseline justify-between">
         <h2 className="font-display text-xl font-semibold">Fazer agora</h2>
         {overdueLeft > 0 && (
@@ -308,44 +309,7 @@ export default function TodayTasks({
         </details>
       )}
 
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="toast-enter fixed bottom-24 right-4 z-30 overflow-hidden rounded-2xl border border-line-strong bg-card text-sm font-medium shadow-xl md:bottom-6 md:right-6"
-        >
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span>{toast.label}</span>
-            {toast.extra && (
-              <button
-                type="button"
-                onClick={() => {
-                  const run = toast.extra!.run;
-                  setToast(null);
-                  void run();
-                }}
-                className="btn spring-btn min-h-9 px-3 py-1 text-xs"
-              >
-                {toast.extra.label}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                const undo = toast.undo;
-                setToast(null);
-                void undo();
-              }}
-              className="btn btn-primary spring-btn min-h-9 px-3 py-1 text-xs"
-            >
-              Desfazer
-            </button>
-          </div>
-          <div className="h-1 w-full bg-line">
-            <div key={toast.label} className="toast-bar h-full bg-primary" />
-          </div>
-        </div>
-      )}
-    </section>
+      <ActionToast toast={toast} onDismiss={() => setToast(null)} />
+    </BentoCard>
   );
 }

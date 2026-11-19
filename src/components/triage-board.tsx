@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ActionToast } from "@/components/ui";
 import { CATEGORIES } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
 import {
@@ -914,26 +915,10 @@ export default function TriageBoard({
         )}
       </div>
 
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-24 right-4 z-30 flex items-center gap-3 rounded-2xl border border-line-strong bg-card px-4 py-3 text-sm font-medium shadow-lg md:bottom-6 md:right-6"
-        >
-          <span>{toast.label}</span>
-          <button
-            type="button"
-            onClick={() => {
-              const undo = toast.undo;
-              setToast(null);
-              undo();
-            }}
-            className="btn btn-primary min-h-9 px-3 py-1 text-xs"
-          >
-            Desfazer (U)
-          </button>
-        </div>
-      )}
+      <ActionToast
+        toast={toast ? { ...toast, undoLabel: "Desfazer (U)" } : null}
+        onDismiss={() => setToast(null)}
+      />
     </div>
   );
 }
