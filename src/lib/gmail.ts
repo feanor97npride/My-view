@@ -118,9 +118,11 @@ async function gpost(path: string, token: string, body: unknown): Promise<void> 
   if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
-async function syncEmailsUncached(token: string, userEmail: string, userRules: EmailRule[]) {
-  const list = await gget<{ messages?: { id: string }[] }>(
-    `/messages?q=${encodeURIComponent("is:unread OR newer_than:7d")}&maxResults=50`,
+async function syncEmailsUncached(token: string, userEmail: string, userRules: EmailRule[], pageToken?: string) {
+  const q = encodeURIComponent("is:unread OR newer_than:7d OR in:inbox");
+  const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+  const list = await gget<{ messages?: { id: string }[]; nextPageToken?: string }>(
+    `/messages?q=${q}&maxResults=50${pageParam}`,
     token,
   );
   const msgs = await Promise.all(
@@ -238,29 +240,31 @@ async function syncEmailsUncached(token: string, userEmail: string, userRules: E
   return {
     counts,
     emails: emails.sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt)),
+    nextPageToken: list.nextPageToken ?? null,
   };
 }
 
 const cachedSyncEmails = unstable_cache(
-  async (userEmail: string, rulesKey: string, token: string, userRules: EmailRule[]) => {
+  async (userEmail: string, rulesKey: string, pageKey: string, token: string, userRules: EmailRule[]) => {
     void rulesKey;
-    return syncEmailsUncached(token, userEmail, userRules);
+    return syncEmailsUncached(token, userEmail, userRules, pageKey || undefined);
   },
   ["gmail-sync"],
   { revalidate: 45, tags: ["emails"] },
 );
 
-// shortcut: only the 50 most recent matching messages per load, upgrade with pagination when the inbox grows
-export const syncEmails = cache(async (token: string) => {
+// shortcut: 50 matching messages per page, with nextPageToken for loading older batches
+export const syncEmails = cache(async (token: string, pageToken?: string) => {
   const [userEmail, userRules] = await Promise.all([
     getCurrentUserEmail().then((e) => e ?? ""),
     getEmailRules().catch(() => [] as EmailRule[]),
   ]);
   const rulesKey = JSON.stringify(userRules);
-  const raw = await cachedSyncEmails(userEmail, rulesKey, token, userRules);
+  const raw = await cachedSyncEmails(userEmail, rulesKey, pageToken ?? "", token, userRules);
   return {
     counts: raw.counts,
     emails: raw.emails.map((e) => ({ ...e, receivedAt: new Date(e.receivedAt) })),
+    nextPageToken: raw.nextPageToken,
   };
 });
 

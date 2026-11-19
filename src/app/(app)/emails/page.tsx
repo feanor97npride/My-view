@@ -90,6 +90,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
         initialSnoozed={snoozed}
         todayKey={todayKey}
         templates={templates}
+        initialNextPageToken={mail.nextPageToken}
       />
     </main>
   );

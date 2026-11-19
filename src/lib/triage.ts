@@ -96,7 +96,7 @@ const isPending = (i: TriItem) => i.unread && i.inInbox !== false && !i.triado;
 export function buildQueue(items: TriItem[], filtro: Fila | null, now = new Date()): TriItem[] {
   if (filtro && filtro !== "aguardando") {
     return items
-      .filter((i) => filaOf(i.category) === filtro && i.inInbox !== false)
+      .filter((i) => filaOf(i.category) === filtro && i.inInbox !== false && !i.triado)
       .sort((a, b) => Number(b.unread) - Number(a.unread) || rankOf(a, now) - rankOf(b, now) || byAge(a, b));
   }
   if (filtro === "aguardando") return [];

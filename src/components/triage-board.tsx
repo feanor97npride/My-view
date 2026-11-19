@@ -58,6 +58,7 @@ export default function TriageBoard({
   initialSnoozed = {},
   todayKey = "",
   templates = [],
+  initialNextPageToken = null,
 }: {
   items: TriItem[];
   waiting: Waiting[] | null; // null = could not be read
@@ -69,9 +70,15 @@ export default function TriageBoard({
   initialSnoozed?: Record<string, string>;
   todayKey?: string;
   templates?: { id: string; label: string; body: string }[];
+  initialNextPageToken?: string | null;
 }) {
   const [items, setItems] = useState<TriItem[]>(initialItems);
   useEffect(() => setItems(initialItems), [initialItems]);
+
+  const [nextPageToken, setNextPageToken] = useState<string | null>(initialNextPageToken);
+  useEffect(() => setNextPageToken(initialNextPageToken), [initialNextPageToken]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const autoTriedRef = useRef<Set<string>>(new Set());
 
   const [snoozed, setSnoozed] = useState<Record<string, string>>(initialSnoozed);
   useEffect(() => setSnoozed(initialSnoozed), [initialSnoozed]);
@@ -275,15 +282,15 @@ export default function TriageBoard({
     setActionError(null);
     const nextUnread = !item.unread;
     const nextItem = !nextUnread ? (queue.find((i) => i.id !== item.id) ?? null) : null;
-    const apply = (unreadVal: boolean, focusTarget: string | null) => {
-      setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, unread: unreadVal } : x)));
+    const apply = (unreadVal: boolean, triadoVal: boolean | undefined, focusTarget: string | null) => {
+      setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, unread: unreadVal, triado: triadoVal } : x)));
       if (focusTarget !== undefined) setFocusId(focusTarget);
     };
     const commit = () => {
       setLeaving(false);
-      apply(nextUnread, !nextUnread ? (nextItem?.id ?? null) : item.id);
+      apply(nextUnread, !nextUnread ? true : false, !nextUnread ? (nextItem?.id ?? null) : item.id);
       const undo = () => {
-        apply(item.unread, item.id);
+        apply(item.unread, item.triado, item.id);
         void postAction({ action: item.unread ? "markUnread" : "markRead", ids: [item.id] }).then((u) => {
           if (!u.ok) setActionError(u.error);
         });
@@ -292,7 +299,7 @@ export default function TriageBoard({
       void postAction({ action: nextUnread ? "markUnread" : "markRead", ids: [item.id] }).then((r) => {
         if (!r.ok) {
           setToast(null);
-          apply(item.unread, item.id);
+          apply(item.unread, item.triado, item.id);
           setActionError(r.error);
         }
       });
@@ -300,6 +307,40 @@ export default function TriageBoard({
     if (!nextUnread) advanceWithMotion(commit);
     else commit();
   };
+
+  const loadMoreEmails = async () => {
+    if (!nextPageToken || loadingMore) return;
+    const tokenUsed = nextPageToken;
+    autoTriedRef.current.add(tokenUsed);
+    setLoadingMore(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/emails/page?pageToken=${encodeURIComponent(tokenUsed)}`);
+      const j = (await res.json().catch(() => ({}))) as { items?: TriItem[]; nextPageToken?: string | null; error?: string };
+      if (!res.ok) {
+        setActionError(j.error ?? `Erro ${res.status}`);
+        return;
+      }
+      const incoming = j.items ?? [];
+      setItems((prev) => {
+        const seen = new Set(prev.map((x) => x.id));
+        const fresh = incoming.filter((x) => !seen.has(x.id));
+        return fresh.length ? [...prev, ...fresh] : prev;
+      });
+      setNextPageToken(j.nextPageToken ?? null);
+    } catch {
+      setActionError("Falha de conexão ao carregar e-mails anteriores.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    if (queue.length === 0 && !q.trim() && filtro !== "aguardando" && nextPageToken && !loadingMore && !autoTriedRef.current.has(nextPageToken)) {
+      void loadMoreEmails();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue.length, q, filtro, nextPageToken, loadingMore]);
 
   const markInformativosRead = () => {
     const ids = unreadInformativos.map((i) => i.id);
@@ -948,13 +989,27 @@ export default function TriageBoard({
                 <p className="m-0 text-mute">
                   {filtro === "aguardando" ? "Essas conversas aparecem no bloco abaixo, sem cartão em foco." : "Nenhum e-mail nesta fila."}
                 </p>
-                <button type="button" className="btn" onClick={() => setFiltro(null)}>Limpar filtro</button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="btn" onClick={() => setFiltro(null)}>Limpar filtro</button>
+                  {filtro !== "aguardando" && nextPageToken && (
+                    <button type="button" disabled={loadingMore} onClick={() => void loadMoreEmails()} className="btn btn-primary spring-btn disabled:opacity-60">
+                      {loadingMore ? "Carregando mais 50…" : "Carregar mais 50 anteriores"}
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-start gap-3">
-                <h2 className="font-display text-3xl font-bold">Tudo em dia</h2>
+                <h2 className="font-display text-3xl font-bold">{loadingMore ? "Buscando mais 50 e-mails…" : "Tudo em dia"}</h2>
                 <p className="m-0 text-mute">Você leu todos os e-mails que pedem atenção. {plural(items.filter((i) => !i.unread).length, "e-mail lido", "e-mails lidos")} na janela.</p>
-                <a href="#leitura-leve" className="btn">Ir para a Leitura leve</a>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a href="#leitura-leve" className="btn">Ir para a Leitura leve</a>
+                  {nextPageToken && (
+                    <button type="button" disabled={loadingMore} onClick={() => void loadMoreEmails()} className="btn btn-primary spring-btn disabled:opacity-60">
+                      {loadingMore ? "Carregando…" : "Carregar mais 50 anteriores"}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {snoozedItems.length > 0 && (
