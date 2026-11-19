@@ -52,6 +52,7 @@ export default function TriageBoard({
   dateLine,
   awaitingDays,
   initialFila,
+  shortcutsEnabled = true,
 }: {
   items: TriItem[];
   waiting: Waiting[] | null; // null = could not be read
@@ -59,6 +60,7 @@ export default function TriageBoard({
   dateLine: string;
   awaitingDays: number;
   initialFila: Fila | null;
+  shortcutsEnabled?: boolean;
 }) {
   const [items, setItems] = useState<TriItem[]>(initialItems);
   useEffect(() => setItems(initialItems), [initialItems]);
@@ -159,16 +161,17 @@ export default function TriageBoard({
     if (item.clickupTaskId) return;
     setActionError(null);
     setSched(null);
-    const nextItem = queue.find((i) => i.id !== item.id) ?? null;
-    advanceWithMotion(() => {
+    const isFocused = item.id === focus?.id;
+    const nextItem = isFocused ? (queue.find((i) => i.id !== item.id) ?? null) : null;
+    const run = () => {
       setLeaving(false);
       setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: true, clickupTaskId: "pending" } : x)));
-      setFocusId(nextItem?.id ?? null);
+      if (isFocused) setFocusId(nextItem?.id ?? null);
       const description = `${decodeEntities(item.snippet)}\n\nDe: ${item.sender}\nConversa: ${item.url}`.trim();
       void postAction<{ taskId?: string }>({ action: "task", title: item.subject, description }).then((r) => {
         if (!r.ok) {
           setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: false, clickupTaskId: undefined } : x)));
-          setFocusId(item.id);
+          if (isFocused) setFocusId(item.id);
           setActionError(r.error);
           return;
         }
@@ -176,7 +179,7 @@ export default function TriageBoard({
         setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, clickupTaskId: taskId } : x)));
         showToast("Tarefa criada no ClickUp", () => {
           setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: false, clickupTaskId: undefined } : x)));
-          setFocusId(item.id);
+          if (isFocused) setFocusId(item.id);
           if (taskId) {
             void postAction({ action: "untask", taskId }).then((u) => {
               if (!u.ok) setActionError(u.error);
@@ -184,7 +187,9 @@ export default function TriageBoard({
           }
         });
       });
-    });
+    };
+    if (isFocused) advanceWithMotion(run);
+    else run();
   };
 
   const openSchedule = (item: TriItem) => {
@@ -396,6 +401,7 @@ export default function TriageBoard({
       if (e.key === "Escape") (t as HTMLElement).blur();
       return;
     }
+    if (!shortcutsEnabled) return;
     const k = e.key.toLowerCase();
     if (k === "j" || k === "arrowright") go(1);
     else if (k === "k" || k === "arrowleft") go(-1);
@@ -726,6 +732,14 @@ export default function TriageBoard({
                   <span className="block truncate text-sm text-mute">{m.subject}</span>
                   <span className="sr-only">Colocar em foco</span>
                 </button>
+                <button
+                  type="button"
+                  disabled={!!m.clickupTaskId}
+                  onClick={() => taskFocus(m)}
+                  className="btn hidden min-h-9 self-center px-3 py-1.5 text-[13px] disabled:opacity-50 sm:inline-flex"
+                >
+                  → ClickUp
+                </button>
                 <ExtLink href={m.url} className="btn hidden min-h-9 self-center px-3 py-1.5 text-[13px] no-underline sm:inline-flex">Responder</ExtLink>
               </li>
             ))}
@@ -869,19 +883,25 @@ export default function TriageBoard({
 
       {/* Atalhos */}
       <div className="flex flex-wrap items-center gap-3 text-xs text-mute">
-        <button type="button" onClick={() => setHelp((h) => !h)} aria-expanded={help} className="btn min-h-9 px-3 py-1 text-[13px]">Atalhos ( ? )</button>
-        {help && (
-          <p className="m-0 flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span><Kbd>A</Kbd> arquivar</span>
-            <span><Kbd>G</Kbd> pôr na agenda</span>
-            <span><Kbd>T</Kbd> virar tarefa</span>
-            <span><Kbd>U</Kbd> desfazer</span>
-            <span><Kbd>J</Kbd> <Kbd>→</Kbd> próximo</span>
-            <span><Kbd>K</Kbd> <Kbd>←</Kbd> anterior</span>
-            <span><Kbd>1</Kbd>–<Kbd>7</Kbd> fila</span>
-            <span><Kbd>/</Kbd> buscar</span>
-            <span><Kbd>R</Kbd> abrir no Gmail</span>
-          </p>
+        {shortcutsEnabled ? (
+          <>
+            <button type="button" onClick={() => setHelp((h) => !h)} aria-expanded={help} className="btn min-h-9 px-3 py-1 text-[13px]">Atalhos ( ? )</button>
+            {help && (
+              <p className="m-0 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span><Kbd>A</Kbd> arquivar</span>
+                <span><Kbd>G</Kbd> pôr na agenda</span>
+                <span><Kbd>T</Kbd> virar tarefa</span>
+                <span><Kbd>U</Kbd> desfazer</span>
+                <span><Kbd>J</Kbd> <Kbd>→</Kbd> próximo</span>
+                <span><Kbd>K</Kbd> <Kbd>←</Kbd> anterior</span>
+                <span><Kbd>1</Kbd>–<Kbd>7</Kbd> fila</span>
+                <span><Kbd>/</Kbd> buscar</span>
+                <span><Kbd>R</Kbd> abrir no Gmail</span>
+              </p>
+            )}
+          </>
+        ) : (
+          <span>Atalhos de teclado desativados (Configurações).</span>
         )}
       </div>
 

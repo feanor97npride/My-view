@@ -7,7 +7,7 @@ import { CLICKUP_LISTS, normalizeClickupList } from "@/lib/clickup";
 import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getAwaitingDays, getDefaultClickupList, getEmailRules, getMeetingWindow, getSelectedCalendars, setAwaitingDays, setDefaultClickupList, setEmailRules, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getSelectedCalendars, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -49,6 +49,15 @@ async function saveClickupList(formData: FormData) {
   redirect("/configuracoes?lista=ok");
 }
 
+async function saveShortcuts(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  await setKeyboardShortcutsEnabled(formData.get("atalhos") === "1");
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?atalhos=ok");
+}
+
 async function addRule(formData: FormData) {
   "use server";
   const session = await auth();
@@ -84,7 +93,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string; atalhos?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -95,13 +104,14 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, windowMin, awaitingDays, clickupList] = await Promise.all([
+  const [all, selected, rules, windowMin, awaitingDays, clickupList, shortcutsEnabled] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
     getMeetingWindow().catch(() => 30),
     getAwaitingDays().catch(() => 2),
     getDefaultClickupList().catch(() => CLICKUP_LISTS[0].id),
+    getKeyboardShortcutsEnabled().catch(() => true),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
@@ -194,6 +204,23 @@ export default async function Configuracoes({
         <button type="submit" className="btn btn-primary min-h-11">Salvar lista</button>
         {params.lista && (
           <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Lista padrão salva.</p>
+        )}
+      </form>
+
+      <form action={saveShortcuts} className="card flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-xl font-semibold">Atalhos de teclado</h2>
+          <p className="text-sm text-mute">Teclas rápidas (A, G, T, J, K, U, /, 1–7) na mesa de triagem de E-mails.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="atalhos" value="1" defaultChecked={shortcutsEnabled} className="h-5 w-5 accent-[var(--primary)]" />
+            Ativar atalhos
+          </label>
+          <button type="submit" className="btn btn-primary min-h-11">Salvar</button>
+        </div>
+        {params.atalhos && (
+          <p role="status" className="chip chip-green m-0 w-full whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Preferência de atalhos salva.</p>
         )}
       </form>
 

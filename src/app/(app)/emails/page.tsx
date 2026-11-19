@@ -5,7 +5,7 @@ import TriageBoard from "@/components/triage-board";
 import { primaryTz } from "@/lib/calendar";
 import { gmailThreadUrl, shortDate } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
-import { getAwaitingDays } from "@/lib/prefs";
+import { getAwaitingDays, getKeyboardShortcutsEnabled } from "@/lib/prefs";
 import { FILAS, type Fila, type TriItem } from "@/lib/triage";
 
 export const metadata = { title: "E-mails" };
@@ -25,7 +25,10 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
 
   const account = session.user?.email ?? "";
   const initialFila = (FILAS as readonly string[]).includes(params.categoria ?? "") ? (params.categoria as Fila) : null;
-  const awaitingDays = await getAwaitingDays().catch(() => 2);
+  const [awaitingDays, shortcutsEnabled] = await Promise.all([
+    getAwaitingDays().catch(() => 2),
+    getKeyboardShortcutsEnabled().catch(() => true),
+  ]);
 
   // shortcut: a Gmail failure shows a banner instead of an error page
   const [mail, tz, waiting] = await Promise.all([
@@ -75,6 +78,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
         dateLine={dateLine}
         awaitingDays={awaitingDays}
         initialFila={initialFila}
+        shortcutsEnabled={shortcutsEnabled}
       />
     </main>
   );

@@ -11,6 +11,7 @@ const EMAIL_RULES = "email_rules";
 const AWAITING_DAYS = "awaiting_days";
 const MEETING_WINDOW = "meeting_window_min";
 const CLICKUP_LIST = "default_clickup_list";
+const KEYBOARD_SHORTCUTS = "keyboard_shortcuts";
 
 // null = nothing saved yet, meaning "show every calendar".
 export async function getSelectedCalendars(): Promise<string[] | null> {
@@ -80,5 +81,19 @@ export async function setDefaultClickupList(id: string): Promise<void> {
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`
     INSERT INTO preferences (key, value) VALUES (${CLICKUP_LIST}, ${JSON.stringify(normalizeClickupList(id))}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
+}
+
+// Keyboard shortcuts on the E-mails triage desk; enabled until the owner disables them.
+export async function getKeyboardShortcutsEnabled(): Promise<boolean> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  const rows = await sql`SELECT value FROM preferences WHERE key = ${KEYBOARD_SHORTCUTS}`;
+  return rows[0] ? Boolean(rows[0].value) : true;
+}
+
+export async function setKeyboardShortcutsEnabled(enabled: boolean): Promise<void> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  await sql`
+    INSERT INTO preferences (key, value) VALUES (${KEYBOARD_SHORTCUTS}, ${JSON.stringify(Boolean(enabled))}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
 }
