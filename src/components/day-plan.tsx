@@ -109,14 +109,14 @@ export default function DayPlan({
   const pending = items.filter((i) => !reserved[i.id]);
 
   return (
-    <section aria-label="Plano do dia" className="card flex flex-col gap-3">
+    <section aria-label="Plano do dia" className="card bento-card flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="font-display text-xl font-semibold">Plano do dia</h2>
           <p className="m-0 text-[13px] text-mute">{freeLabel}</p>
         </div>
         {pending.length > 1 && (
-          <button type="button" onClick={() => reserve(pending)} disabled={busy.size > 0} className="btn btn-primary min-h-9 px-3 py-1 text-[13px] disabled:opacity-50">
+          <button type="button" onClick={() => reserve(pending)} disabled={busy.size > 0} className="btn btn-primary spring-btn min-h-9 px-3 py-1 text-[13px] disabled:opacity-50">
             Reservar tudo ({pending.length})
           </button>
         )}
@@ -131,13 +131,13 @@ export default function DayPlan({
 
       {note && items.length === 0 && <p className="m-0 text-mute">{note}</p>}
 
-      <ol className="m-0 flex list-none flex-col gap-2 p-0">
+      <ol className="m-0 flex list-none flex-col gap-2.5 p-0">
         {items.map((it) => {
           const [kindLabel, kindChip] = KIND[it.kind];
           const done = !!reserved[it.id];
           return (
-            <li key={it.id} className="flex flex-wrap items-center gap-3 rounded-2xl p-3" style={{ background: "var(--surface-3)" }}>
-              <span className="w-[104px] shrink-0 text-sm font-semibold tabular-nums">{it.label}</span>
+            <li key={it.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-bg p-3.5 transition-colors hover:border-line-strong">
+              <span className="w-[104px] shrink-0 text-sm font-semibold tabular-nums text-primary">{it.label}</span>
               <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="flex flex-wrap items-center gap-2">
                   <span className={`chip ${kindChip}`}>{kindLabel}</span>
@@ -158,7 +158,7 @@ export default function DayPlan({
                 type="button"
                 disabled={done || busy.has(it.id)}
                 onClick={() => reserve([it])}
-                className="btn min-h-9 shrink-0 px-3 py-1 text-[13px] disabled:opacity-60"
+                className="btn spring-btn min-h-9 shrink-0 px-3 py-1 text-[13px] disabled:opacity-60"
               >
                 {done ? "Reservado ✓" : busy.has(it.id) ? "Reservando…" : "Reservar na agenda"}
               </button>
@@ -178,20 +178,25 @@ export default function DayPlan({
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-24 right-4 z-30 flex items-center gap-3 rounded-2xl border border-line-strong bg-card px-4 py-3 text-sm font-medium shadow-lg md:bottom-6 md:right-6"
+          className="toast-enter fixed bottom-24 right-4 z-30 overflow-hidden rounded-2xl border border-line-strong bg-card text-sm font-medium shadow-xl md:bottom-6 md:right-6"
         >
-          <span>{toast.label}</span>
-          <button
-            type="button"
-            onClick={() => {
-              const undo = toast.undo;
-              setToast(null);
-              void undo();
-            }}
-            className="btn btn-primary min-h-9 px-3 py-1 text-xs"
-          >
-            Desfazer
-          </button>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span>{toast.label}</span>
+            <button
+              type="button"
+              onClick={() => {
+                const undo = toast.undo;
+                setToast(null);
+                void undo();
+              }}
+              className="btn btn-primary spring-btn min-h-9 px-3 py-1 text-xs"
+            >
+              Desfazer
+            </button>
+          </div>
+          <div className="h-1 w-full bg-line">
+            <div key={toast.label} className="toast-bar h-full bg-primary" />
+          </div>
         </div>
       )}
     </section>

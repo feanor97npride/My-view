@@ -156,7 +156,7 @@ export default function TodayTasks({
     const options = statuses[t.listId] ?? [];
     const disabled = busy.has(t.id);
     return (
-      <li key={t.id} className="flex flex-col gap-2 border-t border-line py-3">
+      <li key={t.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-bg p-4 transition-colors hover:border-line-strong">
         <a href={t.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
           {t.title}
           <span className="sr-only"> (abre no ClickUp, em nova aba)</span>
@@ -171,8 +171,8 @@ export default function TodayTasks({
             <span className="sr-only"> (abre no Gmail, em nova aba)</span>
           </a>
         )}
-        <span className="flex flex-wrap items-center gap-2">
-          <button type="button" disabled={disabled} onClick={() => complete(t)} className="btn btn-primary min-h-9 px-3 py-1 text-[13px] disabled:opacity-50">
+        <span className="flex flex-wrap items-center gap-2 pt-0.5">
+          <button type="button" disabled={disabled} onClick={() => complete(t)} className="btn btn-primary spring-btn min-h-9 px-3.5 py-1 text-[13px] disabled:opacity-50">
             Concluir
           </button>
           <details className="relative">
@@ -257,8 +257,8 @@ export default function TodayTasks({
   };
 
   return (
-    <section className="card">
-      <div className="mb-1 flex items-baseline justify-between">
+    <section className="card bento-card">
+      <div className="mb-2 flex items-baseline justify-between">
         <h2 className="font-display text-xl font-semibold">Fazer agora</h2>
         {overdueLeft > 0 && (
           <span className="text-[13px] font-semibold" style={{ color: "var(--red-fg)" }}>{overdueLeft} atrasadas</span>
@@ -266,7 +266,7 @@ export default function TodayTasks({
       </div>
       {overdueLeft > 0 && replan.length > 0 && (
         <div className="my-2 flex flex-col gap-2">
-          <button type="button" onClick={() => setPreview((v) => !v)} aria-expanded={preview} className="btn min-h-9 self-start px-3 py-1 text-[13px]">
+          <button type="button" onClick={() => setPreview((v) => !v)} aria-expanded={preview} className="btn spring-btn min-h-9 self-start px-3 py-1 text-[13px]">
             Replanejar atrasadas
           </button>
           {preview && (
@@ -281,10 +281,10 @@ export default function TodayTasks({
                 ))}
               </ul>
               <div className="flex gap-2">
-                <button type="button" disabled={replanning} onClick={applyReplan} className="btn btn-primary min-h-9 px-3 py-1 text-[13px] disabled:opacity-50">
+                <button type="button" disabled={replanning} onClick={applyReplan} className="btn btn-primary spring-btn min-h-9 px-3 py-1 text-[13px] disabled:opacity-50">
                   {replanning ? "Aplicando…" : `Aplicar a ${plan.length}`}
                 </button>
-                <button type="button" onClick={() => setPreview(false)} className="btn min-h-9 px-3 py-1 text-[13px]">Cancelar</button>
+                <button type="button" onClick={() => setPreview(false)} className="btn spring-btn min-h-9 px-3 py-1 text-[13px]">Cancelar</button>
               </div>
             </div>
           )}
@@ -298,13 +298,13 @@ export default function TodayTasks({
       )}
       {tasksError && <p className="text-sm text-mute">ClickUp indisponível: {tasksError}</p>}
       {!tasksError && tasks.length === 0 && <p className="text-mute">Nada atrasado nem para hoje.</p>}
-      <ul className="m-0 list-none p-0">{tasks.slice(0, 4).map(row)}</ul>
+      <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{tasks.slice(0, 4).map(row)}</ul>
       {tasks.length > 4 && (
-        <details>
+        <details className="mt-2">
           <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-primary-ink">
             Ver as outras {tasks.length - 4} atrasadas ou para hoje
           </summary>
-          <ul className="m-0 list-none p-0">{tasks.slice(4).map(row)}</ul>
+          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{tasks.slice(4).map(row)}</ul>
         </details>
       )}
 
@@ -312,33 +312,38 @@ export default function TodayTasks({
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-24 right-4 z-30 flex items-center gap-3 rounded-2xl border border-line-strong bg-card px-4 py-3 text-sm font-medium shadow-lg md:bottom-6 md:right-6"
+          className="toast-enter fixed bottom-24 right-4 z-30 overflow-hidden rounded-2xl border border-line-strong bg-card text-sm font-medium shadow-xl md:bottom-6 md:right-6"
         >
-          <span>{toast.label}</span>
-          {toast.extra && (
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span>{toast.label}</span>
+            {toast.extra && (
+              <button
+                type="button"
+                onClick={() => {
+                  const run = toast.extra!.run;
+                  setToast(null);
+                  void run();
+                }}
+                className="btn spring-btn min-h-9 px-3 py-1 text-xs"
+              >
+                {toast.extra.label}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
-                const run = toast.extra!.run;
+                const undo = toast.undo;
                 setToast(null);
-                void run();
+                void undo();
               }}
-              className="btn min-h-9 px-3 py-1 text-xs"
+              className="btn btn-primary spring-btn min-h-9 px-3 py-1 text-xs"
             >
-              {toast.extra.label}
+              Desfazer
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              const undo = toast.undo;
-              setToast(null);
-              void undo();
-            }}
-            className="btn btn-primary min-h-9 px-3 py-1 text-xs"
-          >
-            Desfazer
-          </button>
+          </div>
+          <div className="h-1 w-full bg-line">
+            <div key={toast.label} className="toast-bar h-full bg-primary" />
+          </div>
         </div>
       )}
     </section>

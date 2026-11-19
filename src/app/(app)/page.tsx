@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import DayPlan from "@/components/day-plan";
+import DayRing from "@/components/day-ring";
 import LiveMeeting from "@/components/live-meeting";
 import Reconnect from "@/components/reconnect";
 import TodayTasks from "@/components/today-tasks";
@@ -13,30 +14,6 @@ import { awaitingReply, syncEmails } from "@/lib/gmail";
 import { getAwaitingDays, getMeetingWindow, getPlanPrefs, getSelectedCalendars } from "@/lib/prefs";
 import { DEFAULT_PLAN, dayKey, freeBlocks, planOverdue, scoreTask, suggestPlan, zonedMs, type Candidate } from "@/lib/task-dates";
 import { extractFinance, filaOf, financeDueDays } from "@/lib/triage";
-
-const KPI_ICONS = {
-  agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
-  late: "M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
-  today: "M5 3v18M5 4h12l-2 4 2 4H5",
-  mail: "M3 6h18v12H3zM3 7l9 6 9-6",
-};
-
-function Kpi({ label, value, hint, icon, tone }: { label: string; value: string | number; hint: string; icon: string; tone: string }) {
-  return (
-    <div className="card flex items-center gap-3.5 px-5 py-[18px]">
-      <span className={`chip ${tone} flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[14px] p-0`} aria-hidden="true">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d={icon} />
-        </svg>
-      </span>
-      <div>
-        <div className="text-[13px] text-mute">{label}</div>
-        <div className="font-display text-3xl font-bold leading-tight">{value}</div>
-        <div className="text-xs text-mute">{hint}</div>
-      </div>
-    </div>
-  );
-}
 
 export const metadata = { title: "Hoje" };
 
@@ -186,57 +163,104 @@ export default async function Home() {
   };
   const tag = { done: ["Concluído", "chip-slate"], now: ["Em andamento", "chip-primary"], next: ["A seguir", "chip-blue"] };
 
+  const doneEvents = (today?.events ?? []).filter((e) => !e.allDay && e.end < now).length;
+  const totalEvents = (today?.events ?? []).filter((e) => !e.allDay).length;
+  const totalGoal = totalEvents + urgent.length;
+
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:p-10">
-      <header>
-        <p className="text-sm capitalize text-mute">{dateLabel}</p>
-        <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
-          {greeting}{first && `, ${first}`}
-        </h1>
-      </header>
+    <main className="mx-auto flex max-w-6xl flex-col gap-5 p-4 md:p-10">
+      {/* Hero Bento: Saudação + Resumo/Alertas + 4 KPIs integrados + Anel do dia */}
+      <section aria-label="Visão geral de hoje" className="spring-card spring-d1 grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="card bento-card flex flex-col justify-between gap-4 lg:col-span-8">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="m-0 text-xs font-medium capitalize text-mute">{dateLabel}</p>
+            <span className="text-xs text-mute">
+              Atualizado às {fmt(now)} · <Link href="/">Atualizar</Link>
+            </span>
+          </div>
 
-      <section aria-label="Resumo do dia" className="card flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-display text-xl font-semibold">Resumo do dia</h2>
-          <span className="text-xs text-mute">
-            Atualizado às {fmt(now)} · <Link href="/">Atualizar</Link>
-          </span>
+          <div>
+            <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+              {greeting}{first && `, ${first}`}
+            </h1>
+            {summary && <p className="mt-1 mb-0 text-sm text-mute">{summary}</p>}
+          </div>
+
+          <div className="flex flex-col gap-1 empty:hidden">
+            <LiveMeeting events={timed} serverNow={now.toISOString()} windowMin={windowMin} />
+            {alerts.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {alerts.map((a) => (
+                  <Link key={a.id} href={a.href} className={`chip chip-${a.tone} no-underline hover:brightness-95`}>
+                    {a.label}: {a.text}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div aria-label="Resumo" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
+              <div className="text-[11px] text-mute">Agenda</div>
+              <div className="font-display text-xl font-bold tabular-nums">
+                {today ? today.events.length : "–"}
+                {nextEvent && <span className="ml-1 text-xs font-normal text-mute">({fmt(nextEvent.start)})</span>}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
+              <div className="text-[11px] text-mute">Atrasadas</div>
+              <div className="font-display text-xl font-bold tabular-nums" style={Array.isArray(tasks) && overdue > 0 ? { color: "var(--red-fg)" } : undefined}>
+                {Array.isArray(tasks) ? overdue : "–"}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
+              <div className="text-[11px] text-mute">Vencem hoje</div>
+              <div className="font-display text-xl font-bold tabular-nums" style={Array.isArray(tasks) && dueToday > 0 ? { color: "var(--amber-fg)" } : undefined}>
+                {Array.isArray(tasks) ? dueToday : "–"}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
+              <div className="text-[11px] text-mute">E-mails ação</div>
+              <div className="font-display text-xl font-bold tabular-nums text-primary">
+                {mail && !(mail instanceof Error) ? actions.length : "–"}
+              </div>
+            </div>
+          </div>
         </div>
-        {summary && <p className="m-0">{summary}</p>}
-        <div className="flex flex-col gap-1 empty:hidden">
-          <LiveMeeting events={timed} serverNow={now.toISOString()} windowMin={windowMin} />
-          {alerts.map((a) => (
-            <Link key={a.id} href={a.href} className="flex flex-wrap items-center gap-2.5 rounded-xl px-3 py-2 text-ink no-underline hover:bg-primary-soft">
-              <span className={`chip chip-${a.tone}`}>{a.label}</span>
-              <span className="font-medium">{a.text}</span>
-            </Link>
-          ))}
-        </div>
+
+        <DayRing done={doneEvents} total={totalGoal} />
       </section>
 
-      <section aria-label="Resumo" className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
-        <Kpi label="Compromissos hoje" value={today ? today.events.length : "–"} hint={nextEvent ? `Próximo às ${fmt(nextEvent.start)}` : "Nada mais hoje"} icon={KPI_ICONS.agenda} tone="chip-blue" />
-        <Kpi label="Tarefas atrasadas" value={Array.isArray(tasks) ? overdue : "–"} hint={Array.isArray(tasks) ? `de ${tasks.length} abertas` : "ClickUp indisponível"} icon={KPI_ICONS.late} tone="chip-red" />
-        <Kpi label="Vencem hoje" value={Array.isArray(tasks) ? dueToday : "–"} hint="ainda no prazo" icon={KPI_ICONS.today} tone="chip-amber" />
-        <Kpi label="E-mails de ação" value={mail && !(mail instanceof Error) ? actions.length : "–"} hint="não lidos" icon={KPI_ICONS.mail} tone="chip-violet" />
-      </section>
+      {/* Bloco central de ação: Fazer agora + Plano do dia */}
+      <div className="spring-card spring-d2 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        <div className="min-w-0 lg:col-span-7">
+          <TodayTasks
+            tasks={urgent.map((t) => ({ id: t.id, title: t.title, list: t.list, listId: t.listId, status: t.status, bucket: t.bucket, url: t.url, origin: origins[t.id] ? { emailId: origins[t.id].emailId, subject: origins[t.id].subject, url: gmailThreadUrl(account, origins[t.id].threadId) } : undefined }))}
+            statuses={statuses}
+            tasksError={tasks instanceof Error ? tasks.message : null}
+            replan={replan}
+          />
+        </div>
+        <div className="min-w-0 lg:col-span-5">
+          <DayPlan
+            items={planItems}
+            unplaced={placed.unplaced.map((c) => c.title)}
+            note={planNote}
+            freeLabel={`${freeMin >= 60 ? `${Math.floor(freeMin / 60)}h${freeMin % 60 ? ` ${freeMin % 60}min` : ""}` : `${freeMin} min`} livres no expediente (${planPrefs.start}–${planPrefs.end})`}
+          />
+        </div>
+      </div>
 
-      <DayPlan
-        items={planItems}
-        unplaced={placed.unplaced.map((c) => c.title)}
-        note={planNote}
-        freeLabel={`${freeMin >= 60 ? `${Math.floor(freeMin / 60)}h${freeMin % 60 ? ` ${freeMin % 60}min` : ""}` : `${freeMin} min`} livres no expediente (${planPrefs.start}–${planPrefs.end})`}
-      />
-
-      <div className="flex flex-wrap items-start gap-6">
-        <section className="card min-w-0 flex-[1.4_1_420px]">
+      {/* Base: Linha do tempo + E-mails que pedem ação */}
+      <div className="spring-card spring-d3 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        <section className="card bento-card min-w-0 lg:col-span-6">
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="font-display text-xl font-semibold">Linha do tempo de hoje</h2>
             <Link href="/semana" className="text-sm font-semibold">Ver semana</Link>
           </div>
           {!today && <Reconnect what="Agenda" />}
           {today && today.events.length === 0 && <p className="text-mute">Nenhum compromisso hoje.</p>}
-          <ol className="flex list-none flex-col gap-3 p-0">
+          <ol className="m-0 flex list-none flex-col gap-3 p-0">
             {today?.events.map((e) => {
               const s = state(e);
               return (
@@ -255,7 +279,7 @@ export default async function Home() {
                     href={e.link ?? undefined}
                     target={e.link ? "_blank" : undefined}
                     rel={e.link ? "noopener noreferrer" : undefined}
-                    className={`block min-w-0 flex-1 rounded-xl border px-3.5 py-3 no-underline ${e.link ? "hover:border-primary" : ""} ${cardClass[s]}`}
+                    className={`block min-w-0 flex-1 rounded-2xl border px-3.5 py-3 no-underline transition-colors ${e.link ? "hover:border-primary" : ""} ${cardClass[s]}`}
                   >
                     <span className="flex items-start justify-between gap-2">
                       <span className="font-semibold">{e.title}</span>
@@ -270,47 +294,38 @@ export default async function Home() {
           </ol>
         </section>
 
-        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-6">
-          <TodayTasks
-            tasks={urgent.map((t) => ({ id: t.id, title: t.title, list: t.list, listId: t.listId, status: t.status, bucket: t.bucket, url: t.url, origin: origins[t.id] ? { emailId: origins[t.id].emailId, subject: origins[t.id].subject, url: gmailThreadUrl(account, origins[t.id].threadId) } : undefined }))}
-            statuses={statuses}
-            tasksError={tasks instanceof Error ? tasks.message : null}
-            replan={replan}
-          />
-
-          <section className="card">
-            <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="font-display text-xl font-semibold">E-mails que pedem ação</h2>
-              {mail && !(mail instanceof Error) && <span className="text-[13px] text-mute">{actions.length} não lidos</span>}
-            </div>
-            {mail instanceof Error && <p className="text-sm text-mute">Gmail indisponível: {mail.message}</p>}
-            {mail && !(mail instanceof Error) && actions.length === 0 && <p className="text-mute">Nenhum e-mail de ação por ler.</p>}
-            <div className="flex flex-col gap-2.5">
-              {actions.slice(0, 3).map((m) => (
-                <a
-                  key={m.id}
-                  href={gmailThreadUrl(account, m.threadId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex flex-col gap-1.5 rounded-xl p-3 text-ink no-underline hover:outline hover:outline-2 hover:outline-[var(--primary)]"
-                  style={{ background: "var(--violet-bg)" }}
-                >
-                  <span className="truncate text-[13px] text-mute">{m.sender}</span>
-                  <span className="font-semibold">{m.subject}</span>
-                  <span>
-                    <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
-                    <span className="sr-only"> Abre no Gmail, em nova aba</span>
-                  </span>
-                </a>
-              ))}
-            </div>
-            {actions.length > 3 && (
-              <Link href="/emails?categoria=acao&naolidos=1" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold">
-                Ver os outros {actions.length - 3} e-mails de ação
-              </Link>
-            )}
-          </section>
-        </div>
+        <section className="card bento-card min-w-0 lg:col-span-6">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="font-display text-xl font-semibold">E-mails que pedem ação</h2>
+            {mail && !(mail instanceof Error) && <span className="text-[13px] text-mute">{actions.length} não lidos</span>}
+          </div>
+          {mail instanceof Error && <p className="text-sm text-mute">Gmail indisponível: {mail.message}</p>}
+          {mail && !(mail instanceof Error) && actions.length === 0 && <p className="text-mute">Nenhum e-mail de ação por ler.</p>}
+          <div className="flex flex-col gap-2.5">
+            {actions.slice(0, 3).map((m) => (
+              <a
+                key={m.id}
+                href={gmailThreadUrl(account, m.threadId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col gap-1.5 rounded-2xl p-3.5 text-ink no-underline transition-all hover:outline hover:outline-2 hover:outline-[var(--primary)]"
+                style={{ background: "var(--violet-bg)" }}
+              >
+                <span className="truncate text-[13px] text-mute">{m.sender}</span>
+                <span className="font-semibold">{m.subject}</span>
+                <span>
+                  <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
+                  <span className="sr-only"> Abre no Gmail, em nova aba</span>
+                </span>
+              </a>
+            ))}
+          </div>
+          {actions.length > 3 && (
+            <Link href="/emails?categoria=acao&naolidos=1" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold">
+              Ver os outros {actions.length - 3} e-mails de ação
+            </Link>
+          )}
+        </section>
       </div>
     </main>
   );
