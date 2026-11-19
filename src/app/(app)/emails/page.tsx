@@ -5,6 +5,7 @@ import TriageBoard from "@/components/triage-board";
 import { primaryTz } from "@/lib/calendar";
 import { gmailThreadUrl, shortDate } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
+import { tasksByEmail } from "@/lib/links";
 import { getAwaitingDays, getKeyboardShortcutsEnabled } from "@/lib/prefs";
 import { FILAS, type Fila, type TriItem } from "@/lib/triage";
 
@@ -37,6 +38,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
     awaitingReply(token, account, awaitingDays).catch((e: Error) => e),
   ]);
   const now = new Date();
+  const taskOf = mail instanceof Error ? {} : await tasksByEmail(mail.emails.map((m) => m.id)).catch(() => ({}) as Record<string, string>);
 
   if (mail instanceof Error) {
     return (
@@ -63,6 +65,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
     category: m.category,
     when: shortDate(m.receivedAt, now, tz),
     url: gmailThreadUrl(account, m.threadId),
+    clickupTaskId: taskOf[m.id],
   }));
   const waitingItems = Array.isArray(waiting)
     ? waiting.map((w) => ({ threadId: w.threadId, to: w.to, toAddress: w.toAddress, subject: w.subject, dias: w.dias, url: gmailThreadUrl(account, w.threadId) }))

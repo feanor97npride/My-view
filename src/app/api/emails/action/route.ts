@@ -4,6 +4,7 @@ import { createCalendarEvent, deleteCalendarEvent } from "@/lib/calendar";
 import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
 import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
 import { archiveEmail, createFollowupDraft, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
+import { deleteTaskOrigin, saveTaskOrigin } from "@/lib/links";
 import { getDefaultClickupList, getEmailRules, setEmailRules } from "@/lib/prefs";
 
 type Payload =
@@ -11,7 +12,7 @@ type Payload =
   | { action: "markRead" | "markUnread"; ids: string[] }
   | { action: "schedule"; title: string; description: string; startIso: string; endIso: string }
   | { action: "unschedule"; eventId: string }
-  | { action: "task"; title: string; description: string; listId?: string }
+  | { action: "task"; title: string; description: string; listId?: string; emailId?: string; threadId?: string }
   | { action: "untask"; taskId: string }
   | { action: "followup"; threadId: string; to: string; subject: string }
   | { action: "unfollowup"; draftId: string }
@@ -71,10 +72,15 @@ export async function POST(req: Request) {
         name: body.title,
         description: body.description ?? "",
       });
+      // The link back to the e-mail is a bonus: a failure here never undoes the task that was created.
+      if (typeof body.emailId === "string" && body.emailId && typeof body.threadId === "string") {
+        await saveTaskOrigin({ taskId: created.id, emailId: body.emailId, threadId: body.threadId, subject: body.title }).catch(() => {});
+      }
       return NextResponse.json({ ok: true, taskId: created.id, url: created.url });
     }
     if (body.action === "untask" && typeof body.taskId === "string" && body.taskId) {
       await deleteClickupTask(body.taskId);
+      await deleteTaskOrigin(body.taskId).catch(() => {});
       return NextResponse.json({ ok: true });
     }
     if (body.action === "followup" && typeof body.threadId === "string" && body.threadId) {

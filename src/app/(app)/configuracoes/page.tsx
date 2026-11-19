@@ -6,8 +6,9 @@ import { listCalendars, pickCalendars } from "@/lib/calendar";
 import { CLICKUP_LISTS, normalizeClickupList } from "@/lib/clickup";
 import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
+import { DEFAULT_PLAN, normalizePlanPrefs } from "@/lib/task-dates";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getSelectedCalendars, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getSelectedCalendars, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setSelectedCalendars } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -58,6 +59,24 @@ async function saveShortcuts(formData: FormData) {
   redirect("/configuracoes?atalhos=ok");
 }
 
+async function savePlan(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const input = {
+    perDay: formData.get("porDia"),
+    start: formData.get("inicio"),
+    end: formData.get("fim"),
+    taskMin: formData.get("minutos"),
+  };
+  const prefs = normalizePlanPrefs(input);
+  // An end before the start is rejected instead of silently replaced, so the owner sees what happened.
+  if (String(input.start) >= String(input.end)) redirect("/configuracoes?plano=horario");
+  await setPlanPrefs(prefs);
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?plano=ok");
+}
+
 async function addRule(formData: FormData) {
   "use server";
   const session = await auth();
@@ -93,7 +112,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string; atalhos?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string; atalhos?: string; plano?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -104,7 +123,7 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, windowMin, awaitingDays, clickupList, shortcutsEnabled] = await Promise.all([
+  const [all, selected, rules, windowMin, awaitingDays, clickupList, shortcutsEnabled, planPrefs] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
@@ -112,6 +131,7 @@ export default async function Configuracoes({
     getAwaitingDays().catch(() => 2),
     getDefaultClickupList().catch(() => CLICKUP_LISTS[0].id),
     getKeyboardShortcutsEnabled().catch(() => true),
+    getPlanPrefs().catch(() => DEFAULT_PLAN),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
@@ -222,6 +242,36 @@ export default async function Configuracoes({
         {params.atalhos && (
           <p role="status" className="chip chip-green m-0 w-full whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Preferência de atalhos salva.</p>
         )}
+      </form>
+
+      <form action={savePlan} className="card flex flex-col gap-4">
+        <div>
+          <h2 className="font-display text-xl font-semibold">Plano do dia</h2>
+          <p className="text-sm text-mute">Expediente usado para sugerir blocos na agenda e limite de atrasadas por dia ao replanejar.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <label className="flex flex-col gap-1 text-xs text-mute">
+            Início do expediente
+            <input type="time" name="inicio" required defaultValue={planPrefs.start} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-mute">
+            Fim do expediente
+            <input type="time" name="fim" required defaultValue={planPrefs.end} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-mute">
+            Minutos por tarefa
+            <input type="number" name="minutos" min={15} max={240} step={5} defaultValue={planPrefs.taskMin} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-mute">
+            Atrasadas por dia
+            <input type="number" name="porDia" min={1} max={10} defaultValue={planPrefs.perDay} className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink" />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" className="btn btn-primary min-h-11">Salvar</button>
+          {params.plano === "ok" && <p role="status" className="chip chip-green m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">Plano do dia salvo.</p>}
+          {params.plano === "horario" && <p role="alert" className="chip chip-red m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">O fim do expediente precisa ser depois do início.</p>}
+        </div>
       </form>
 
       <section className="card flex flex-col gap-4">

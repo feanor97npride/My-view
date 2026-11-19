@@ -4,6 +4,7 @@ import { neon } from "@neondatabase/serverless";
 import { normalizeClickupList } from "./clickup";
 import { normalizeWindow } from "./day-summary";
 import { normalizeAwaitingDays } from "./email-view";
+import { DEFAULT_PLAN, normalizePlanPrefs, type PlanPrefs } from "./task-dates";
 import { normalizeRule, type EmailRule } from "./email-rules";
 
 const CALENDARS = "calendars";
@@ -12,6 +13,7 @@ const AWAITING_DAYS = "awaiting_days";
 const MEETING_WINDOW = "meeting_window_min";
 const CLICKUP_LIST = "default_clickup_list";
 const KEYBOARD_SHORTCUTS = "keyboard_shortcuts";
+const DAY_PLAN = "day_plan";
 
 // null = nothing saved yet, meaning "show every calendar".
 export async function getSelectedCalendars(): Promise<string[] | null> {
@@ -95,5 +97,19 @@ export async function setKeyboardShortcutsEnabled(enabled: boolean): Promise<voi
   const sql = neon(process.env.DATABASE_URL ?? "");
   await sql`
     INSERT INTO preferences (key, value) VALUES (${KEYBOARD_SHORTCUTS}, ${JSON.stringify(Boolean(enabled))}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
+}
+
+// Day plan: overdue tasks per day, work hours and default block length.
+export async function getPlanPrefs(): Promise<PlanPrefs> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  const rows = await sql`SELECT value FROM preferences WHERE key = ${DAY_PLAN}`;
+  return rows[0] ? normalizePlanPrefs(rows[0].value) : DEFAULT_PLAN;
+}
+
+export async function setPlanPrefs(prefs: Partial<PlanPrefs>): Promise<void> {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  await sql`
+    INSERT INTO preferences (key, value) VALUES (${DAY_PLAN}, ${JSON.stringify(normalizePlanPrefs(prefs))}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
 }

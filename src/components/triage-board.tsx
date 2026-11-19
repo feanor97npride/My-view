@@ -168,7 +168,7 @@ export default function TriageBoard({
       setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: true, clickupTaskId: "pending" } : x)));
       if (isFocused) setFocusId(nextItem?.id ?? null);
       const description = `${decodeEntities(item.snippet)}\n\nDe: ${item.sender}\nConversa: ${item.url}`.trim();
-      void postAction<{ taskId?: string }>({ action: "task", title: item.subject, description }).then((r) => {
+      void postAction<{ taskId?: string }>({ action: "task", title: item.subject, description, emailId: item.id, threadId: item.threadId }).then((r) => {
         if (!r.ok) {
           setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, triado: false, clickupTaskId: undefined } : x)));
           if (isFocused) setFocusId(item.id);
@@ -600,6 +600,11 @@ export default function TriageBoard({
                     <span className="text-[11px] font-medium opacity-70">R</span>
                   </ExtLink>
                 </div>
+                {focus.clickupTaskId && focus.clickupTaskId !== "pending" && (
+                  <p className="m-0 text-sm">
+                    <ExtLink href={`https://app.clickup.com/t/${focus.clickupTaskId}`} className="font-semibold">Tarefa criada no ClickUp ↗</ExtLink>
+                  </p>
+                )}
                 {sched?.id === focus.id && (
                   <form onSubmit={confirmSchedule} className="flex flex-col gap-3 rounded-2xl border border-line-strong p-4" style={{ background: "var(--surface-3)" }}>
                     <div className="flex items-center justify-between gap-2">

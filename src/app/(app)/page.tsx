@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import DayPlan from "@/components/day-plan";
 import LiveMeeting from "@/components/live-meeting";
 import Reconnect from "@/components/reconnect";
+import TodayTasks from "@/components/today-tasks";
 import { busyHours, timeline } from "@/lib/calendar";
-import { openTasks, type Task } from "@/lib/clickup";
+import { cachedListStatuses, openTasks } from "@/lib/clickup";
 import { staticAlerts, summarize } from "@/lib/day-summary";
 import { gmailThreadUrl } from "@/lib/email-view";
+import { originsByTask } from "@/lib/links";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
-import { getAwaitingDays, getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
+import { getAwaitingDays, getMeetingWindow, getPlanPrefs, getSelectedCalendars } from "@/lib/prefs";
+import { DEFAULT_PLAN, dayKey, freeBlocks, planOverdue, scoreTask, suggestPlan, zonedMs, type Candidate } from "@/lib/task-dates";
+import { extractFinance, financeDueDays } from "@/lib/triage";
 
 const KPI_ICONS = {
   agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
@@ -35,25 +40,11 @@ function Kpi({ label, value, hint, icon, tone }: { label: string; value: string 
 
 export const metadata = { title: "Hoje" };
 
-function TaskRow({ t }: { t: Task }) {
-  return (
-    <li className="flex flex-col gap-1.5 border-t border-line py-3">
-      <a href={t.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
-        {t.title}
-        <span className="sr-only"> (abre no ClickUp, em nova aba)</span>
-      </a>
-      <span className="flex flex-wrap items-center gap-2">
-        <span className={`chip ${t.bucket === "overdue" ? "chip-red" : "chip-amber"}`}>{t.bucket === "overdue" ? "Atrasada" : "Hoje"}</span>
-        <span className="text-[13px] text-mute">{t.list} · {t.status}</span>
-      </span>
-    </li>
-  );
-}
-
 export default async function Home() {
   const session = await auth();
   const selected = await getSelectedCalendars().catch(() => null);
   const windowMin = await getMeetingWindow().catch(() => 30);
+  const planPrefs = await getPlanPrefs().catch(() => DEFAULT_PLAN);
   const today = session?.accessToken ? await timeline(session.accessToken, new Date(), 1, selected) : null;
   // shortcut: a ClickUp or Gmail failure shows a note instead of breaking the rest of the page
   const tasks = await openTasks().catch((e: Error) => e);
@@ -63,6 +54,20 @@ export default async function Home() {
     session?.accessToken && session.user?.email
       ? await awaitingReply(session.accessToken, session.user.email, awaitingDays).catch(() => null)
       : null;
+
+  const statuses: Record<string, string[]> = {};
+  if (Array.isArray(tasks)) {
+    const ids = [...new Set(tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today").map((t) => t.listId).filter(Boolean))];
+    await Promise.all(
+      ids.map(async (id) => {
+        statuses[id] = (await cachedListStatuses(id).catch(() => [])).map((x) => x.status);
+      }),
+    );
+  }
+
+  const origins = Array.isArray(tasks)
+    ? await originsByTask(tasks.filter((t) => t.bucket === "overdue" || t.bucket === "today").map((t) => t.id)).catch(() => ({}) as Awaited<ReturnType<typeof originsByTask>>)
+    : {};
 
   const now = new Date();
   const tz = today?.tz ?? "UTC";
@@ -101,6 +106,76 @@ export default async function Home() {
   const timed = (today?.events ?? [])
     .filter((e) => !e.allDay && e.end > now)
     .map((e) => ({ id: e.id, title: e.title, start: e.start.toISOString(), end: e.end.toISOString() }));
+
+
+  // Replan proposal and day plan. Both only use what is already loaded above.
+  const todayKey = dayKey(now, tz);
+  const loadByDay: Record<string, number> = {};
+  const overdueTasks = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue") : [];
+  if (Array.isArray(tasks)) {
+    for (const t of tasks) {
+      if (t.bucket === "overdue" || !t.due) continue;
+      const k = dayKey(t.due, tz);
+      loadByDay[k] = (loadByDay[k] ?? 0) + 1;
+    }
+  }
+  const replan = planOverdue(
+    overdueTasks.slice(0, 50).map((t) => ({ id: t.id, priority: t.priority, dueMs: t.due?.getTime() ?? null })),
+    todayKey,
+    planPrefs.perDay,
+    loadByDay,
+  );
+
+  const candidates: Candidate[] = [];
+  if (Array.isArray(tasks)) {
+    for (const t of urgent.slice(0, 8)) {
+      const days = t.due ? Math.max(0, Math.floor((now.getTime() - t.due.getTime()) / 86_400_000)) : 0;
+      candidates.push({ id: `task-${t.id}`, kind: "task", title: t.title, minutes: planPrefs.taskMin, score: scoreTask(t.bucket, days, t.priority), url: t.url });
+    }
+  }
+  if (mailOk) {
+    const dueSoon = mail.emails.filter((e) => {
+      if (e.category !== "financeiro" || e.inInbox === false) return false;
+      const d = financeDueDays(extractFinance(`${e.subject} ${e.snippet}`).vencimento, now);
+      return d !== null && d <= 3;
+    }).length;
+    if (dueSoon > 0) {
+      candidates.push({ id: "finance", kind: "finance", title: `Financeiro: ${dueSoon} ${dueSoon === 1 ? "vence" : "vencem"} em até 3 dias`, minutes: 20, score: 90 });
+    }
+    if (actions.length > 0) {
+      candidates.push({ id: "mail-actions", kind: "email", title: `Triar ${actions.length} e-mail${actions.length === 1 ? "" : "s"} de ação`, minutes: 15, score: 60 });
+    }
+  }
+  const workStart = zonedMs(todayKey, planPrefs.start, tz);
+  const workEnd = zonedMs(todayKey, planPrefs.end, tz);
+  const from = Math.max(workStart, Math.ceil(now.getTime() / 300_000) * 300_000);
+  const free = freeBlocks(
+    (today?.events ?? []).filter((e) => !e.allDay).map((e) => ({ start: e.start.getTime(), end: e.end.getTime() })),
+    from,
+    workEnd,
+    15,
+  );
+  const placed = suggestPlan(free, candidates);
+  const hm = (ms: number) => fmt(new Date(ms));
+  const freeMin = Math.round(free.reduce((s, b) => s + (b.end - b.start), 0) / 60_000);
+  const planNote = !today
+    ? "Conecte a agenda para sugerir blocos."
+    : from >= workEnd
+      ? `O expediente (${planPrefs.start}–${planPrefs.end}) já terminou.`
+      : candidates.length === 0
+        ? "Nada pendente para planejar hoje."
+        : "Sem horário livre hoje dentro do expediente.";
+  const planItems = placed.items.map((i) => ({
+    id: i.id,
+    kind: i.kind,
+    title: i.title,
+    minutes: i.minutes,
+    startIso: new Date(i.startMs).toISOString(),
+    endIso: new Date(i.endMs).toISOString(),
+    label: `${hm(i.startMs)}–${hm(i.endMs)}`,
+    url: i.url,
+    href: i.kind === "email" ? "/emails?categoria=acao&naolidos=1" : i.kind === "finance" ? "/emails?categoria=financeiro" : undefined,
+  }));
 
   const state = (e: { allDay: boolean; start: Date; end: Date }) =>
     e.allDay ? "next" : e.end < now ? "done" : e.start <= now ? "now" : "next";
@@ -146,6 +221,13 @@ export default async function Home() {
         <Kpi label="E-mails de ação" value={mail && !(mail instanceof Error) ? actions.length : "–"} hint="não lidos" icon={KPI_ICONS.mail} tone="chip-violet" />
       </section>
 
+      <DayPlan
+        items={planItems}
+        unplaced={placed.unplaced.map((c) => c.title)}
+        note={planNote}
+        freeLabel={`${freeMin >= 60 ? `${Math.floor(freeMin / 60)}h${freeMin % 60 ? ` ${freeMin % 60}min` : ""}` : `${freeMin} min`} livres no expediente (${planPrefs.start}–${planPrefs.end})`}
+      />
+
       <div className="flex flex-wrap items-start gap-6">
         <section className="card min-w-0 flex-[1.4_1_420px]">
           <div className="mb-4 flex items-baseline justify-between">
@@ -189,31 +271,12 @@ export default async function Home() {
         </section>
 
         <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-6">
-          <section className="card">
-            <div className="mb-1 flex items-baseline justify-between">
-              <h2 className="font-display text-xl font-semibold">Fazer agora</h2>
-              {overdue > 0 && <span className="text-[13px] font-semibold" style={{ color: "var(--red-fg)" }}>{overdue} atrasadas</span>}
-            </div>
-            {!Array.isArray(tasks) && <p className="text-sm text-mute">ClickUp indisponível: {tasks.message}</p>}
-            {Array.isArray(tasks) && urgent.length === 0 && <p className="text-mute">Nada atrasado nem para hoje.</p>}
-            <ul className="m-0 list-none p-0">
-              {urgent.slice(0, 4).map((t) => (
-                <TaskRow key={t.id} t={t} />
-              ))}
-            </ul>
-            {urgent.length > 4 && (
-              <details>
-                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-primary-ink">
-                  Ver as outras {urgent.length - 4} atrasadas ou para hoje
-                </summary>
-                <ul className="m-0 list-none p-0">
-                  {urgent.slice(4).map((t) => (
-                    <TaskRow key={t.id} t={t} />
-                  ))}
-                </ul>
-              </details>
-            )}
-          </section>
+          <TodayTasks
+            tasks={urgent.map((t) => ({ id: t.id, title: t.title, list: t.list, listId: t.listId, status: t.status, bucket: t.bucket, url: t.url, origin: origins[t.id] ? { emailId: origins[t.id].emailId, subject: origins[t.id].subject, url: gmailThreadUrl(account, origins[t.id].threadId) } : undefined }))}
+            statuses={statuses}
+            tasksError={tasks instanceof Error ? tasks.message : null}
+            replan={replan}
+          />
 
           <section className="card">
             <div className="mb-3 flex items-baseline justify-between">

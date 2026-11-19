@@ -17,6 +17,7 @@ export type Task = {
   id: string;
   title: string;
   list: string;
+  listId: string;
   status: string;
   priority: string | null;
   due: Date | null;
@@ -33,7 +34,7 @@ type RawTask = {
   due_date: string | null;
   date_done?: string | null;
   subtasks?: unknown[];
-  list: { name: string };
+  list: { id?: string; name: string };
 };
 
 // Statuses that mean the same across lists, merged in charts only.
@@ -102,6 +103,7 @@ export async function openTasks(now = new Date()): Promise<Task[]> {
         id: t.id,
         title: t.name,
         list: t.list.name,
+        listId: t.list.id ?? "",
         status: t.status.status,
         priority: t.priority?.priority ?? null,
         due,
@@ -117,7 +119,7 @@ export async function openTasks(now = new Date()): Promise<Task[]> {
 export const urgentTasksCount = unstable_cache(
   async () => (await openTasks()).filter((t) => t.bucket === "overdue" || t.bucket === "today").length,
   ["urgent-tasks-count"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["tasks"] },
 );
 
 // When tasks were completed during the last `days` days.
@@ -152,3 +154,50 @@ export async function deleteClickupTask(taskId: string): Promise<void> {
   });
   if (!res.ok && res.status !== 404) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
+
+const clickupHeaders = () => {
+  const token = process.env.CLICKUP_API_TOKEN;
+  if (!token) throw new Error("CLICKUP_API_TOKEN não configurado");
+  return { Authorization: token, "Content-Type": "application/json" };
+};
+
+export const inScopeList = (listId: string) => CLICKUP_LISTS.some((l) => l.id === listId);
+
+export type TaskSnapshot = { id: string; listId: string; status: string; dueMs: number | null };
+
+// Reads the fields an action needs to undo itself, and the list so the caller can check the task is in scope.
+export async function getClickupTask(taskId: string): Promise<TaskSnapshot> {
+  const res = await fetch(`${API}/task/${encodeURIComponent(taskId)}`, { headers: clickupHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const t = (await res.json()) as { id: string; status: { status: string }; due_date: string | null; list: { id: string } };
+  return { id: t.id, listId: t.list.id, status: t.status.status, dueMs: t.due_date ? Number(t.due_date) : null };
+}
+
+export type ListStatus = { status: string; type: string };
+
+export async function listStatuses(listId: string): Promise<ListStatus[]> {
+  const res = await fetch(`${API}/list/${encodeURIComponent(listId)}`, { headers: clickupHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = (await res.json()) as { statuses?: ListStatus[] };
+  return j.statuses ?? [];
+}
+
+// The status that closes a task in this list: "closed" first, then "done".
+export const closingStatus = (statuses: ListStatus[]): string | null =>
+  (statuses.find((s) => s.type === "closed") ?? statuses.find((s) => s.type === "done"))?.status ?? null;
+
+export async function updateClickupTask(taskId: string, patch: { status?: string; dueMs?: number | null }): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (patch.status !== undefined) body.status = patch.status;
+  if (patch.dueMs !== undefined) body.due_date = patch.dueMs;
+  const res = await fetch(`${API}/task/${encodeURIComponent(taskId)}`, {
+    method: "PUT",
+    headers: clickupHeaders(),
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
+// Statuses per list change rarely, so the Hoje screen reads them from a 10-minute cache.
+export const cachedListStatuses = unstable_cache(listStatuses, ["list-statuses"], { revalidate: 600 });
