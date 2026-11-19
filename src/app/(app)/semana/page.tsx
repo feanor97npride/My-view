@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import Reconnect from "@/components/reconnect";
+import RetryNotice from "@/components/retry-notice";
 import { BentoCard, SectionHeader } from "@/components/ui";
 import { busyHours, timeline } from "@/lib/calendar";
 import { openTasks } from "@/lib/clickup";
@@ -105,7 +106,7 @@ export default async function Semana() {
         />
       </BentoCard>
 
-      {!Array.isArray(tasks) && <p className="text-sm text-mute">ClickUp indisponível: {tasks.message}</p>}
+      {!Array.isArray(tasks) && <RetryNotice message={`ClickUp indisponível: ${tasks.message}`} />}
 
       <WeekBoard initialDays={perDay} capacityHours={capacityHours} />
     </main>

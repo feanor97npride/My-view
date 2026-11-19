@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ActionToast, BentoCard, type ToastAction } from "@/components/ui";
+import RetryNotice from "@/components/retry-notice";
 
 export type TodayTask = {
   id: string;
@@ -297,7 +298,7 @@ export default function TodayTasks({
           <button type="button" onClick={() => setError(null)} className="btn min-h-8 px-2.5 py-1 text-xs">Fechar</button>
         </div>
       )}
-      {tasksError && <p className="text-sm text-mute">ClickUp indisponível: {tasksError}</p>}
+      {tasksError && <RetryNotice message={`ClickUp indisponível: ${tasksError}`} />}
       {!tasksError && tasks.length === 0 && <p className="text-mute">Nada atrasado nem para hoje.</p>}
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{tasks.slice(0, 4).map(row)}</ul>
       {tasks.length > 4 && (

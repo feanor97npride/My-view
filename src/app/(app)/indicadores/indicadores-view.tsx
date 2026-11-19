@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import RetryNotice from "@/components/retry-notice";
 
 export type StatusRow = { name: string; value: number };
 export type ListRow = { name: string; total: number; overdue: number; today: number };
@@ -97,7 +98,7 @@ export default function IndicadoresView({
       <section aria-label="Resumo" className="spring-card spring-d1 grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="card bento-card flex items-center gap-5 lg:col-span-5">
           {tasksError ? (
-            <p className="text-sm text-mute">ClickUp indisponível: {tasksError}</p>
+              <RetryNotice message={`ClickUp indisponível: ${tasksError}`} />
           ) : (
             <>
               <div
@@ -189,7 +190,7 @@ export default function IndicadoresView({
             </div>
 
             {doneError ? (
-              <p className="text-sm text-mute">ClickUp indisponível: {doneError}</p>
+              <RetryNotice message={`ClickUp indisponível: ${doneError}`} />
             ) : (
               <>
                 <div
@@ -245,7 +246,7 @@ export default function IndicadoresView({
             </div>
 
             {tasksError ? (
-              <p className="text-sm text-mute">ClickUp indisponível: {tasksError}</p>
+                <RetryNotice message={`ClickUp indisponível: ${tasksError}`} />
             ) : byList.length === 0 ? (
               <p className="text-sm text-mute">Nenhuma tarefa aberta no momento.</p>
             ) : (
@@ -302,7 +303,7 @@ export default function IndicadoresView({
           </div>
 
           {mailError ? (
-            <p className="text-sm text-mute">Banco indisponível: {mailError}</p>
+            <RetryNotice message={`Banco indisponível: ${mailError}`} />
           ) : totalMail === 0 ? (
             <p className="text-sm text-mute">Nenhum e-mail classificado nos últimos 7 dias.</p>
           ) : (

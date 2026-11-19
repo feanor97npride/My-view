@@ -5,6 +5,7 @@ import DayRing from "@/components/day-ring";
 import LiveMeeting from "@/components/live-meeting";
 import Reconnect from "@/components/reconnect";
 import RefreshButton from "@/components/refresh-button";
+import RetryNotice from "@/components/retry-notice";
 import TodayTasks from "@/components/today-tasks";
 import { busyHours, timeline } from "@/lib/calendar";
 import { cachedListStatuses, openTasks } from "@/lib/clickup";
@@ -300,7 +301,7 @@ export default async function Home() {
             <h2 className="font-display text-xl font-semibold">E-mails que pedem ação</h2>
             {mail && !(mail instanceof Error) && <span className="text-[13px] text-mute">{actions.length} não lidos</span>}
           </div>
-          {mail instanceof Error && <p className="text-sm text-mute">Gmail indisponível: {mail.message}</p>}
+          {mail instanceof Error && <RetryNotice message={`Gmail indisponível: ${mail.message}`} />}
           {mail && !(mail instanceof Error) && actions.length === 0 && <p className="text-mute">Nenhum e-mail de ação por ler.</p>}
           <div className="flex flex-col gap-2.5">
             {actions.slice(0, 3).map((m) => (
