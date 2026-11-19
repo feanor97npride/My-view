@@ -8,7 +8,7 @@ import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs } from "@/lib/task-dates";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getSelectedCalendars, getUserClickupToken, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setSelectedCalendars, setUserClickupToken } from "@/lib/prefs";
+import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getReplyTemplates, getSelectedCalendars, getUserClickupToken, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setReplyTemplates, setSelectedCalendars, setUserClickupToken } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -109,6 +109,30 @@ async function removeRule(formData: FormData) {
   redirect("/configuracoes?regra=removida");
 }
 
+async function addTemplate(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const label = String(formData.get("tplLabel") ?? "").trim();
+  const body = String(formData.get("tplBody") ?? "").trim();
+  if (!label || !body) redirect("/configuracoes?tpl=invalido");
+  const current = await getReplyTemplates();
+  await setReplyTemplates([...current, { id: `tpl-${Date.now()}`, label, body }]);
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?tpl=ok");
+}
+
+async function removeTemplate(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const id = String(formData.get("tplId") ?? "");
+  const current = await getReplyTemplates();
+  await setReplyTemplates(current.filter((t) => t.id !== id));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?tpl=removido");
+}
+
 export const metadata = { title: "Configurações" };
 
 import { BentoCard, SectionHeader } from "@/components/ui";
@@ -124,7 +148,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; aviso?: string; prazo?: string; lista?: string; token?: string; atalhos?: string; plano?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; prazo?: string; lista?: string; token?: string; atalhos?: string; plano?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -135,10 +159,11 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, windowMin, awaitingDays, clickupList, clickupToken, shortcutsEnabled, planPrefs] = await Promise.all([
+  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, shortcutsEnabled, planPrefs] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
+    getReplyTemplates().catch(() => []),
     getMeetingWindow().catch(() => 30),
     getAwaitingDays().catch(() => 2),
     getDefaultClickupList().catch(() => CLICKUP_LISTS[0].id),
@@ -150,7 +175,7 @@ export default async function Configuracoes({
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
 
   const initialTab =
-    params.prazo || params.regra ? "emails" : params.lista || params.token || params.atalhos ? "clickup" : "agenda";
+    params.prazo || params.regra || params.tpl ? "emails" : params.lista || params.token || params.atalhos ? "clickup" : "agenda";
 
   const toastMessage =
     params.salvo ? "Calendários salvos."
@@ -159,6 +184,8 @@ export default async function Configuracoes({
     : params.prazo ? "Prazo de aguardando resposta salvo."
     : params.regra === "ok" ? "Regra de e-mail salva."
     : params.regra === "removida" ? "Regra removida."
+    : params.tpl === "ok" ? "Template salvo."
+    : params.tpl === "removido" ? "Template removido."
     : params.lista ? "Lista padrão do ClickUp salva."
     : params.token ? "Token do ClickUp desta conta salvo."
     : params.atalhos ? "Preferência de atalhos salva."
@@ -311,6 +338,38 @@ export default async function Configuracoes({
             </select>
           </label>
           <button type="submit" className="btn btn-primary spring-btn min-h-11">Adicionar regra</button>
+        </form>
+      </BentoCard>
+
+      <BentoCard className="flex flex-col gap-4">
+        <SectionHeader
+          title="Templates de resposta rápida"
+          subtitle="Respostas prontas exibidas na tela de E-mails para criar rascunho no Gmail em 1 clique."
+        />
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          {templates.map((t) => (
+            <li key={t.id} className="flex items-start justify-between gap-3 rounded-2xl border border-line bg-bg px-3.5 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="m-0 text-sm font-semibold text-ink">{t.label}</p>
+                <p className="mt-0.5 mb-0 line-clamp-2 whitespace-pre-wrap text-xs text-mute">{t.body}</p>
+              </div>
+              <form action={removeTemplate}>
+                <input type="hidden" name="tplId" value={t.id} />
+                <button type="submit" className="btn spring-btn min-h-9 shrink-0 px-3 py-1 text-xs">Remover</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+        <form action={addTemplate} className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Nome do botão
+            <input name="tplLabel" type="text" required maxLength={50} placeholder="Ex: Recebido, retorno sexta" className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-sm text-ink" />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Texto do e-mail
+            <textarea name="tplBody" required rows={3} maxLength={2000} placeholder="Olá,&#10;&#10;Recebi sua mensagem..." className="rounded-xl border border-line-strong bg-card p-3 text-sm text-ink" />
+          </label>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11 self-start">Adicionar template</button>
         </form>
       </BentoCard>
     </>

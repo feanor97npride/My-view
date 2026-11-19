@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { createCalendarEvent, deleteCalendarEvent, primaryTz } from "@/lib/calendar";
 import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
 import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
-import { archiveEmail, createFollowupDraft, createReplyDraftWithAI, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
+import { archiveEmail, createFollowupDraft, createReplyDraftWithAI, createTemplateDraft, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
 import { deleteTaskOrigin, saveTaskOrigin } from "@/lib/links";
 import { getDefaultClickupList, getEmailRules, getSnoozedEmails, setEmailRules, setSnoozedEmails } from "@/lib/prefs";
 import { isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
@@ -18,6 +18,7 @@ type Payload =
   | { action: "untask"; taskId: string }
   | { action: "followup"; threadId: string; to: string; subject: string }
   | { action: "aiDraft"; threadId: string; to: string; subject: string; snippet: string; tone?: "direto" | "formal" | "followup" }
+  | { action: "templateDraft"; threadId: string; to: string; subject: string; body: string }
   | { action: "unfollowup"; draftId: string }
   | { action: "snooze"; emailId: string; kind?: string; date?: string }
   | { action: "unsnooze"; emailId: string }
@@ -107,6 +108,15 @@ export async function POST(req: Request) {
         tone: body.tone,
       });
       return NextResponse.json({ ok: true, draftId: created.id, text: created.text });
+    }
+    if (body.action === "templateDraft" && typeof body.threadId === "string" && body.threadId && typeof body.body === "string") {
+      const created = await createTemplateDraft(token, {
+        threadId: body.threadId,
+        to: body.to ?? "",
+        subject: body.subject ?? "(sem assunto)",
+        body: body.body,
+      });
+      return NextResponse.json({ ok: true, draftId: created.id });
     }
     if (body.action === "unfollowup" && typeof body.draftId === "string" && body.draftId) {
       await deleteDraft(token, body.draftId);

@@ -57,6 +57,7 @@ export default function TriageBoard({
   shortcutsEnabled = true,
   initialSnoozed = {},
   todayKey = "",
+  templates = [],
 }: {
   items: TriItem[];
   waiting: Waiting[] | null; // null = could not be read
@@ -67,6 +68,7 @@ export default function TriageBoard({
   shortcutsEnabled?: boolean;
   initialSnoozed?: Record<string, string>;
   todayKey?: string;
+  templates?: { id: string; label: string; body: string }[];
 }) {
   const [items, setItems] = useState<TriItem[]>(initialItems);
   useEffect(() => setItems(initialItems), [initialItems]);
@@ -339,6 +341,36 @@ export default function TriageBoard({
       if (r.data.text) setAiDraftPreview({ emailId: item.id, text: r.data.text });
       const draftId = r.data.draftId;
       showToast("Rascunho IA salvo no Gmail", () => {
+        setAiDraftPreview((cur) => (cur?.emailId === item.id ? null : cur));
+        if (draftId) {
+          void postAction({ action: "unfollowup", draftId }).then((u) => {
+            if (!u.ok) setActionError(u.error);
+          });
+        }
+      });
+    });
+  };
+
+  const templateDraftFocus = (item: TriItem, tpl: { id: string; label: string; body: string }) => {
+    if (aiDrafting) return;
+    setActionError(null);
+    setAiDrafting(true);
+    const to = senderInfo(item.sender).email || item.sender;
+    void postAction<{ draftId?: string }>({
+      action: "templateDraft",
+      threadId: item.threadId,
+      to,
+      subject: item.subject,
+      body: tpl.body,
+    }).then((r) => {
+      setAiDrafting(false);
+      if (!r.ok) {
+        setActionError(r.error);
+        return;
+      }
+      setAiDraftPreview({ emailId: item.id, text: tpl.body });
+      const draftId = r.data.draftId;
+      showToast(`Template "${tpl.label}" salvo no Gmail`, () => {
         setAiDraftPreview((cur) => (cur?.emailId === item.id ? null : cur));
         if (draftId) {
           void postAction({ action: "unfollowup", draftId }).then((u) => {
@@ -760,6 +792,22 @@ export default function TriageBoard({
                     </button>
                   </div>
                 </div>
+                {templates.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-mute">Templates:</span>
+                    {templates.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        disabled={aiDrafting}
+                        onClick={() => templateDraftFocus(focus, tpl)}
+                        className="btn spring-btn min-h-7 px-2.5 py-0.5 text-[11px] disabled:opacity-60"
+                      >
+                        {tpl.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {aiDraftPreview?.emailId === focus.id && (
                   <div className="rounded-2xl border border-primary/30 bg-primary-soft/50 p-3.5 text-sm">
                     <div className="mb-1.5 flex items-center justify-between gap-2">

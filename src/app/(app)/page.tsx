@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import DailyBriefing from "@/components/daily-briefing";
 import DayPlan from "@/components/day-plan";
 import DayRing from "@/components/day-ring";
 import HomeActionEmails from "@/components/home-action-emails";
@@ -203,6 +204,15 @@ export default async function Home() {
                 ))}
               </div>
             )}
+            <DailyBriefing
+              account={account}
+              todayKey={todayKey}
+              payload={{
+                events: (today?.events ?? []).filter((e) => !e.allDay && e.end > now).map((e) => ({ time: fmt(e.start), title: e.title })),
+                tasks: urgent.map((t) => ({ bucket: t.bucket === "overdue" ? "Atrasada" : "Hoje", title: t.title })),
+                emails: actions.map((m) => ({ sender: m.sender, subject: m.subject })),
+              }}
+            />
           </div>
 
           <div aria-label="Resumo" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">

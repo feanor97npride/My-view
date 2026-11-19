@@ -20,6 +20,27 @@ const KEYBOARD_SHORTCUTS = "keyboard_shortcuts";
 const DAY_PLAN = "day_plan";
 const QUICK_NOTES = "quick_notes";
 const SNOOZED_EMAILS = "snoozed_emails";
+const REPLY_TEMPLATES = "reply_templates";
+
+export type ReplyTemplate = { id: string; label: string; body: string };
+
+export const DEFAULT_REPLY_TEMPLATES: ReplyTemplate[] = [
+  {
+    id: "tpl-1",
+    label: "Recebido, analiso em breve",
+    body: "Olá,\n\nRecebi sua mensagem. Vou analisar com atenção e te retorno assim que possível.\n\nObrigado!",
+  },
+  {
+    id: "tpl-2",
+    label: "Confirmando recebimento",
+    body: "Olá,\n\nConfirmando o recebimento por aqui. Qualquer novidade, te aviso.\n\nAbraço!",
+  },
+  {
+    id: "tpl-3",
+    label: "Retorno amanhã",
+    body: "Olá,\n\nObrigado pelo envio. Consigo olhar este ponto amanhã e já te dou um retorno.\n\nObrigado!",
+  },
+];
 
 function primaryAllowedEmail(): string | null {
   const raw = process.env.ALLOWED_EMAILS?.trim() || process.env.ALLOWED_EMAIL?.trim() || "";
@@ -184,4 +205,24 @@ export async function getSnoozedEmails(): Promise<Record<string, string>> {
 
 export async function setSnoozedEmails(next: Record<string, string>): Promise<void> {
   await upsertPref(SNOOZED_EMAILS, next);
+}
+
+export async function getReplyTemplates(): Promise<ReplyTemplate[]> {
+  const map = await loadPrefsMap();
+  const raw = map[REPLY_TEMPLATES];
+  if (!Array.isArray(raw)) return DEFAULT_REPLY_TEMPLATES;
+  const list = raw
+    .filter((x): x is ReplyTemplate => !!x && typeof x === "object" && typeof (x as ReplyTemplate).label === "string" && typeof (x as ReplyTemplate).body === "string")
+    .map((x, idx) => ({ id: x.id || `tpl-${idx}`, label: x.label.trim().slice(0, 50), body: x.body.trim().slice(0, 2000) }))
+    .filter((x) => x.label && x.body)
+    .slice(0, 10);
+  return list.length > 0 ? list : DEFAULT_REPLY_TEMPLATES;
+}
+
+export async function setReplyTemplates(list: ReplyTemplate[]): Promise<void> {
+  const clean = list
+    .map((x, idx) => ({ id: x.id || `tpl-${idx}`, label: x.label.trim().slice(0, 50), body: x.body.trim().slice(0, 2000) }))
+    .filter((x) => x.label && x.body)
+    .slice(0, 10);
+  await upsertPref(REPLY_TEMPLATES, clean);
 }

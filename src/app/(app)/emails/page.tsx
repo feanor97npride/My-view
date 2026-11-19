@@ -6,7 +6,7 @@ import { primaryTz } from "@/lib/calendar";
 import { gmailThreadUrl, shortDate } from "@/lib/email-view";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
 import { tasksByEmail } from "@/lib/links";
-import { getAwaitingDays, getKeyboardShortcutsEnabled, getSnoozedEmails } from "@/lib/prefs";
+import { getAwaitingDays, getKeyboardShortcutsEnabled, getReplyTemplates, getSnoozedEmails } from "@/lib/prefs";
 import { dayKey } from "@/lib/task-dates";
 import { FILAS, type Fila, type TriItem } from "@/lib/triage";
 
@@ -27,10 +27,11 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
 
   const account = session.user?.email ?? "";
   const initialFila = (FILAS as readonly string[]).includes(params.categoria ?? "") ? (params.categoria as Fila) : null;
-  const [awaitingDays, shortcutsEnabled, snoozed] = await Promise.all([
+  const [awaitingDays, shortcutsEnabled, snoozed, templates] = await Promise.all([
     getAwaitingDays().catch(() => 2),
     getKeyboardShortcutsEnabled().catch(() => true),
     getSnoozedEmails().catch(() => ({})),
+    getReplyTemplates().catch(() => []),
   ]);
 
   // shortcut: a Gmail failure shows a banner instead of an error page
@@ -88,6 +89,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
         shortcutsEnabled={shortcutsEnabled}
         initialSnoozed={snoozed}
         todayKey={todayKey}
+        templates={templates}
       />
     </main>
   );
