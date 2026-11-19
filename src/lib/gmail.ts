@@ -40,14 +40,47 @@ async function classifyWithAI(sender: string, subject: string, allowed: readonly
   }
 }
 
+import type { EmailAttachment } from "./triage";
+
+type GPart = {
+  filename?: string;
+  mimeType?: string;
+  body?: { size?: number; attachmentId?: string };
+  parts?: GPart[];
+};
+
 type GMsg = {
   id: string;
   threadId: string;
   snippet?: string;
   internalDate: string;
   labelIds?: string[];
-  payload: { headers: { name: string; value: string }[] };
+  payload: { headers?: { name: string; value: string }[]; parts?: GPart[]; filename?: string; mimeType?: string; body?: { size?: number; attachmentId?: string } };
 };
+
+function extractAttachments(part: GPart | undefined): EmailAttachment[] {
+  if (!part) return [];
+  const out: EmailAttachment[] = [];
+  if (part.filename && part.body?.attachmentId) {
+    out.push({
+      id: part.body.attachmentId,
+      filename: part.filename,
+      mimeType: part.mimeType ?? "application/octet-stream",
+      size: part.body.size ?? 0,
+    });
+  }
+  for (const child of part.parts ?? []) out.push(...extractAttachments(child));
+  return out;
+}
+
+const MSG_FIELDS =
+  "id,threadId,snippet,internalDate,labelIds,payload(headers,filename,mimeType,body(size,attachmentId),parts(filename,mimeType,body(size,attachmentId),parts(filename,mimeType,body(size,attachmentId),parts(filename,mimeType,body(size,attachmentId)))))";
+
+export async function getAttachment(token: string, messageId: string, attachmentId: string): Promise<Buffer> {
+  const res = await gget<{ data?: string }>(`/messages/${messageId}/attachments/${attachmentId}`, token);
+  const b64 = (res.data ?? "").replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(b64, "base64");
+}
 
 async function gget<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
@@ -76,7 +109,7 @@ export async function syncEmails(token: string) {
   ]);
   const msgs = await Promise.all(
     (list.messages ?? []).map((m) =>
-      gget<GMsg>(`/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=List-Unsubscribe`, token),
+      gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
     ),
   );
 
@@ -94,10 +127,11 @@ export async function syncEmails(token: string) {
   const emails: EmailItem[] = [];
   let bulkBudget = MAX_BULK_AI;
   for (const m of msgs) {
-    const h = (n: string) => m.payload.headers.find((x) => x.name === n)?.value ?? "";
+    const headers = m.payload.headers ?? [];
+    const h = (n: string) => headers.find((x) => x.name === n)?.value ?? "";
     const sender = h("From");
     const subject = h("Subject") || "(sem assunto)";
-    const hasUnsub = m.payload.headers.some((x) => x.name.toLowerCase() === "list-unsubscribe");
+    const hasUnsub = headers.some((x) => x.name.toLowerCase() === "list-unsubscribe");
     const old = knownMap.get(m.id);
     let category = old?.category as Category | undefined;
     let by = old?.classified_by as string | undefined;
@@ -145,6 +179,7 @@ export async function syncEmails(token: string) {
       unread,
       category: category as string,
       snippet: m.snippet ?? "", // raw: still HTML-encoded, decoded where it is displayed
+      attachments: extractAttachments(m.payload),
     });
   }
 

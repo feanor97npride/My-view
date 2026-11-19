@@ -567,6 +567,29 @@ export default function TriageBoard({
                     ) : null;
                   })()}
                   <p className="m-0">{decodeEntities(focus.snippet) || "Sem prévia disponível."}</p>
+                  {focus.attachments && focus.attachments.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                      <span className="text-xs font-semibold text-mute">
+                        📎 {focus.attachments.length} {focus.attachments.length === 1 ? "anexo" : "anexos"}:
+                      </span>
+                      {focus.attachments.map((att) => {
+                        const kb = att.size >= 1024 * 1024 ? `${(att.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(att.size / 1024))} KB`;
+                        const href = `/api/emails/attachment?messageId=${encodeURIComponent(focus.id)}&attachmentId=${encodeURIComponent(att.id)}&name=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType)}`;
+                        return (
+                          <a
+                            key={att.id}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="spring-btn inline-flex max-w-full items-center gap-1.5 rounded-xl border border-line-strong bg-card px-2.5 py-1 text-xs font-medium text-ink no-underline hover:border-primary hover:bg-primary-soft"
+                          >
+                            <span className="truncate max-w-[200px]">{att.filename}</span>
+                            {att.size > 0 && <span className="shrink-0 text-[11px] tabular-nums text-mute">· {kb}</span>}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <button
@@ -737,7 +760,14 @@ export default function TriageBoard({
                 <button type="button" onClick={() => setFocusId(m.id)} className="min-w-0 flex-1 bg-transparent p-0 text-left text-ink">
                   <span className="flex items-baseline justify-between gap-3">
                     <span className="truncate font-semibold">{senderInfo(m.sender).nome}</span>
-                    <span className="shrink-0 text-xs tabular-nums text-mute">{m.when}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-mute">
+                      {(m.attachments?.length ?? 0) > 0 && (
+                        <span className="mr-1.5" title={`${m.attachments!.length} ${m.attachments!.length === 1 ? "anexo" : "anexos"}`}>
+                          📎
+                        </span>
+                      )}
+                      {m.when}
+                    </span>
                   </span>
                   <span className="block truncate text-sm text-mute">{m.subject}</span>
                   <span className="sr-only">Colocar em foco</span>

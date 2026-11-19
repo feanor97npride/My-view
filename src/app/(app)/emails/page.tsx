@@ -66,6 +66,7 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
     when: shortDate(m.receivedAt, now, tz),
     url: gmailThreadUrl(account, m.threadId),
     clickupTaskId: taskOf[m.id],
+    attachments: m.attachments,
   }));
   const waitingItems = Array.isArray(waiting)
     ? waiting.map((w) => ({ threadId: w.threadId, to: w.to, toAddress: w.toAddress, subject: w.subject, dias: w.dias, url: gmailThreadUrl(account, w.threadId) }))

@@ -1,5 +1,7 @@
 // Pure helpers for the e-mail list (no Gmail, no database), so they can be tested in plain Node.
 
+import type { EmailAttachment } from "./triage";
+
 export type EmailItem = {
   id: string;
   threadId: string;
@@ -10,6 +12,7 @@ export type EmailItem = {
   category: string;
   snippet: string; // short preview from Gmail, kept in memory only, never stored
   inInbox?: boolean;
+  attachments?: EmailAttachment[];
 };
 
 export const CATEGORY_LABEL: Record<string, string> = {

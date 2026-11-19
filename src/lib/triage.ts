@@ -19,6 +19,13 @@ export const filaOf = (category: string): string => PARENT[category] ?? category
 export const IMPORTANTES = ["acao", "financeiro", "agendamento"];
 export const MIN_BARULHENTO = 3;
 
+export type EmailAttachment = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+};
+
 export type TriItem = {
   id: string;
   threadId: string;
@@ -34,6 +41,7 @@ export type TriItem = {
   category: string;
   when: string; // already formatted ("14:05", "14 nov"), computed on the server so the time zone matches
   url: string; // opens the conversation in Gmail
+  attachments?: EmailAttachment[];
 };
 
 // "Nome <a@b.com>" -> name, address and domain.
