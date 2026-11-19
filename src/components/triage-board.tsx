@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORIES } from "@/lib/email-rules";
-import { CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
+import { CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
 import {
   FILAS,
   agruparInformativos,
   buildQueue,
   extractFinance,
+  filaOf,
   maisBarulhento,
   resumir,
   senderInfo,
@@ -89,13 +90,13 @@ export default function TriageBoard({
   const grupos = useMemo(() => agruparInformativos(visible), [visible]);
   const barulhento = maisBarulhento(grupos);
   const outros = grupos.filter((g) => g !== barulhento);
-  const informativos = visible.filter((i) => i.category === "informativo" && i.inInbox !== false);
+  const informativos = visible.filter((i) => filaOf(i.category) === "informativo" && i.inInbox !== false);
   const unreadInformativos = informativos.filter((i) => i.unread);
 
   const count = (f: Fila) => (f === "aguardando" ? (waiting ? waiting.length : null) : (resumo.porCategoria[f] ?? 0));
   const title = tituloResumo(resumo);
   const done = resumo.importantesTotal ? resumo.importantesTriados / resumo.importantesTotal : 1;
-  const unreadIn = (c: string) => visible.filter((i) => i.category === c && i.unread && i.inInbox !== false && !i.triado);
+  const unreadIn = (c: string) => visible.filter((i) => filaOf(i.category) === c && i.unread && i.inInbox !== false && !i.triado);
 
   const showToast = (msg: string, undo: () => void) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -360,7 +361,7 @@ export default function TriageBoard({
   const muteSender = (email: string, nome: string) => {
     if (!email.includes("@")) return;
     const ids = items
-      .filter((i) => i.category === "informativo" && i.inInbox !== false && senderInfo(i.sender).email === email)
+      .filter((i) => filaOf(i.category) === "informativo" && i.inInbox !== false && senderInfo(i.sender).email === email)
       .map((i) => i.id);
     const idSet = new Set(ids);
     setActionError(null);
@@ -487,7 +488,7 @@ export default function TriageBoard({
       <nav aria-label="Filas por categoria" className="flex gap-2.5 overflow-x-auto pb-1 md:grid md:grid-cols-4 md:overflow-visible xl:grid-cols-7">
         {FILAS.map((f, n) => {
           const c = count(f);
-          const isFocus = focus?.category === f;
+          const isFocus = !!focus && filaOf(focus.category) === f;
           const active = filtro === f;
           return (
             <button
@@ -525,7 +526,10 @@ export default function TriageBoard({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-[0.08em] text-mute">Em foco</span>
-                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={fill(focus.category)}>{label(focus.category)}</span>
+                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={fill(filaOf(focus.category))}>{label(filaOf(focus.category))}</span>
+                    {filaOf(focus.category) !== focus.category && (
+                      <span className={`chip ${CATEGORY_CHIP[focus.category] ?? "chip-slate"}`}>{label(focus.category)}</span>
+                    )}
                     <select
                       aria-label="Mudar categoria"
                       value={focus.category}
@@ -544,7 +548,7 @@ export default function TriageBoard({
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Avatar name={senderInfo(focus.sender).nome} cat={focus.category} size={48} />
+                  <Avatar name={senderInfo(focus.sender).nome} cat={filaOf(focus.category)} size={48} />
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{senderInfo(focus.sender).nome}</div>
                     <div className="truncate text-sm text-mute">{senderInfo(focus.sender).dominio || senderInfo(focus.sender).email}</div>
@@ -728,7 +732,7 @@ export default function TriageBoard({
           <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
             {aSeguir.map((m) => (
               <li key={m.id} className="flex items-stretch gap-3 rounded-2xl p-3" style={{ background: "var(--surface-3)" }}>
-                <span aria-hidden="true" className="w-1.5 shrink-0 rounded-full" style={{ background: `var(--k-${m.category})` }} />
+                <span aria-hidden="true" className="w-1.5 shrink-0 rounded-full" style={{ background: `var(--k-${filaOf(m.category)})` }} />
                 <button type="button" onClick={() => setFocusId(m.id)} className="min-w-0 flex-1 bg-transparent p-0 text-left text-ink">
                   <span className="flex items-baseline justify-between gap-3">
                     <span className="truncate font-semibold">{senderInfo(m.sender).nome}</span>

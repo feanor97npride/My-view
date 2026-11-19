@@ -4,6 +4,18 @@
 export const FILAS = ["acao", "financeiro", "agendamento", "trabalho", "aguardando", "pessoal", "informativo"] as const;
 export type Fila = (typeof FILAS)[number];
 
+// Finer categories (picked by the AI) and the queue each one belongs to. Everything else is its own queue.
+const PARENT: Record<string, string> = {
+  compras: "informativo",
+  promocao: "informativo",
+  social: "informativo",
+  seguranca: "acao",
+  viagens: "agendamento",
+  saude: "pessoal",
+  educacao: "pessoal",
+};
+export const filaOf = (category: string): string => PARENT[category] ?? category;
+
 export const IMPORTANTES = ["acao", "financeiro", "agendamento"];
 export const MIN_BARULHENTO = 3;
 
@@ -61,11 +73,11 @@ export function financeDueDays(vencimento: string | undefined, now: Date): numbe
 const RANK: Record<string, number> = { acao: 0, financeiro: 1, agendamento: 2, trabalho: 3, pessoal: 4 };
 
 const rankOf = (i: TriItem, now: Date) => {
-  if (i.category === "financeiro") {
+  if (filaOf(i.category) === "financeiro") {
     const d = financeDueDays(extractFinance(`${i.subject} ${i.snippet}`).vencimento, now);
     if (d !== null && d <= 3 && d >= -7) return -1;
   }
-  return RANK[i.category] ?? 9;
+  return RANK[filaOf(i.category)] ?? 9;
 };
 
 const byAge = (a: TriItem, b: TriItem) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt); // oldest waits longest
@@ -76,12 +88,12 @@ const isPending = (i: TriItem) => i.unread && i.inInbox !== false && !i.triado;
 export function buildQueue(items: TriItem[], filtro: Fila | null, now = new Date()): TriItem[] {
   if (filtro && filtro !== "aguardando") {
     return items
-      .filter((i) => i.category === filtro && i.inInbox !== false)
+      .filter((i) => filaOf(i.category) === filtro && i.inInbox !== false)
       .sort((a, b) => Number(b.unread) - Number(a.unread) || rankOf(a, now) - rankOf(b, now) || byAge(a, b));
   }
   if (filtro === "aguardando") return [];
   return items
-    .filter((i) => isPending(i) && i.category in RANK)
+    .filter((i) => isPending(i) && filaOf(i.category) in RANK)
     .sort((a, b) => rankOf(a, now) - rankOf(b, now) || byAge(a, b));
 }
 
@@ -95,8 +107,8 @@ export type Resumo = {
 
 export function resumir(items: TriItem[]): Resumo {
   const porCategoria: Record<string, number> = {};
-  for (const i of items) porCategoria[i.category] = (porCategoria[i.category] ?? 0) + 1;
-  const imp = items.filter((i) => IMPORTANTES.includes(i.category));
+  for (const i of items) porCategoria[filaOf(i.category)] = (porCategoria[filaOf(i.category)] ?? 0) + 1; // counted by queue
+  const imp = items.filter((i) => IMPORTANTES.includes(filaOf(i.category)));
   const pendentes = imp.filter(isPending).length;
   return { total: items.length, porCategoria, importantes: pendentes, importantesTotal: imp.length, importantesTriados: imp.length - pendentes };
 }
@@ -107,7 +119,7 @@ export type GrupoInformativo = { email: string; nome: string; qtd: number; ultim
 export function agruparInformativos(items: TriItem[]): GrupoInformativo[] {
   const map = new Map<string, TriItem[]>();
   for (const i of items) {
-    if (i.category !== "informativo" || i.inInbox === false) continue;
+    if (filaOf(i.category) !== "informativo" || i.inInbox === false) continue;
     const key = senderInfo(i.sender).email || i.sender;
     map.set(key, [...(map.get(key) ?? []), i]);
   }

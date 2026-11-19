@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types --no-warnings scripts/test-email-rules.ts
 import assert from "node:assert/strict";
-import { categorize, matchUserRule, normalizeRule, parseCategory, ruleCategory } from "../src/lib/email-rules.ts";
+import { BULK_CATEGORIES, categorize, matchUserRule, normalizeRule, parseCategory, ruleCategory } from "../src/lib/email-rules.ts";
 
 // keyword rules
 assert.equal(ruleCategory("Banco X <a@banco.com>", "Sua fatura venceu"), "financeiro");
@@ -14,6 +14,17 @@ assert.equal(parseCategory("Ação."), "acao");
 assert.equal(parseCategory("Categoria: Financeiro"), "financeiro");
 assert.equal(parseCategory("Aguardando."), null);
 assert.equal(parseCategory("não sei"), null);
+// finer categories, and whole-word matching ("educacao" ends with "acao")
+assert.equal(parseCategory("educação"), "educacao");
+assert.equal(parseCategory("Promoção."), "promocao");
+assert.equal(parseCategory("segurança"), "seguranca");
+assert.equal(parseCategory("compras"), "compras");
+assert.equal(parseCategory("Categoria: viagens"), "viagens");
+assert.equal(parseCategory("acao"), "acao");
+// bulk mail only accepts the narrower list
+assert.equal(parseCategory("trabalho", BULK_CATEGORIES), null);
+assert.equal(parseCategory("promocao", BULK_CATEGORIES), "promocao");
+assert.equal(parseCategory("informativo", BULK_CATEGORIES), "informativo");
 
 // normalizeRule: domain or address, known category, size limit
 assert.deepEqual(normalizeRule({ match: "  Empresa.COM ", category: "trabalho" }), { match: "empresa.com", category: "trabalho" });

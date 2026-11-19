@@ -12,7 +12,7 @@ import { originsByTask } from "@/lib/links";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
 import { getAwaitingDays, getMeetingWindow, getPlanPrefs, getSelectedCalendars } from "@/lib/prefs";
 import { DEFAULT_PLAN, dayKey, freeBlocks, planOverdue, scoreTask, suggestPlan, zonedMs, type Candidate } from "@/lib/task-dates";
-import { extractFinance, financeDueDays } from "@/lib/triage";
+import { extractFinance, filaOf, financeDueDays } from "@/lib/triage";
 
 const KPI_ICONS = {
   agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
@@ -81,7 +81,7 @@ export default async function Home() {
   const overdue = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue").length : 0;
   const dueToday = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "today").length : 0;
   const account = session?.user?.email ?? "";
-  const actions = mail && !(mail instanceof Error) ? mail.emails.filter((e) => e.category === "acao" && e.unread) : [];
+  const actions = mail && !(mail instanceof Error) ? mail.emails.filter((e) => filaOf(e.category) === "acao" && e.unread) : [];
   const nextEvent = today?.events.find((e) => !e.allDay && e.start > now);
 
   // Summary and alerts: a source that failed is null, so it is left out instead of showing a false zero.

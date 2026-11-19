@@ -29,6 +29,8 @@
   --s1: #4338ca; --s2: #b45309; --s3: #be185d; --s4: #0f766e; --s5: #475569; --s6: #1d4ed8; --s7: #6d28d9;
   --cat-acao: #6d28d9; --cat-financeiro: #047857; --cat-agendamento: #1d4ed8; --cat-trabalho: #b45309;
   --cat-pessoal: #be185d; --cat-aguardando: #0f766e; --cat-informativo: #64748b;
+  --cat-compras: #c2410c; --cat-viagens: #0369a1; --cat-seguranca: #b91c1c; --cat-saude: #15803d;
+  --cat-educacao: #4f46e5; --cat-social: #a21caf; --cat-promocao: #94a3b8;
 
   /* Triage screen: category fills and the text on them (from the spec, readable on both themes). */
   --k-acao: #ff6b4a; --kt-acao: #1a0b07;
@@ -71,6 +73,8 @@
   --s1: #818cf8; --s2: #fbbf24; --s3: #f472b6; --s4: #2dd4bf; --s5: #94a3b8; --s6: #60a5fa; --s7: #a78bfa;
   --cat-acao: #a78bfa; --cat-financeiro: #34d399; --cat-agendamento: #60a5fa; --cat-trabalho: #fbbf24;
   --cat-pessoal: #f472b6; --cat-aguardando: #2dd4bf; --cat-informativo: #94a3b8;
+  --cat-compras: #fb923c; --cat-viagens: #38bdf8; --cat-seguranca: #f87171; --cat-saude: #4ade80;
+  --cat-educacao: #818cf8; --cat-social: #e879f9; --cat-promocao: #64748b;
 
   --k-informativo: #2b2d5a; --kt-informativo: #f2f2fa;
   --surface-3: #22244a;

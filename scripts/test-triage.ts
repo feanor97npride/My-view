@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types --no-warnings scripts/test-triage.ts
 import assert from "node:assert/strict";
-import { agruparInformativos, buildQueue, extractFinance, financeDueDays, maisBarulhento, resumir, senderInfo, tituloResumo, type TriItem } from "../src/lib/triage.ts";
+import { agruparInformativos, buildQueue, filaOf, extractFinance, financeDueDays, maisBarulhento, resumir, senderInfo, tituloResumo, type TriItem } from "../src/lib/triage.ts";
 
 let n = 0;
 const mk = (category: string, unread: boolean, receivedAt: string, sender = `P${n} <p${n}@x.com>`, subject = `s${n}`): TriItem => ({
@@ -77,5 +77,36 @@ assert.equal(financeDueDays("20/11", refNow), 2);
 assert.equal(financeDueDays("hoje", refNow), 0);
 const finUrgente = mk("financeiro", true, "2026-11-18T10:00:00Z", "Banco <b@x.com>", "Fatura R$ 500,00 vence 20/11");
 assert.equal(buildQueue([acaoOld, finUrgente], null, refNow)[0].id, finUrgente.id);
+
+// finer categories roll up into their queue
+assert.equal(filaOf("compras"), "informativo");
+assert.equal(filaOf("promocao"), "informativo");
+assert.equal(filaOf("social"), "informativo");
+assert.equal(filaOf("seguranca"), "acao");
+assert.equal(filaOf("viagens"), "agendamento");
+assert.equal(filaOf("saude"), "pessoal");
+assert.equal(filaOf("educacao"), "pessoal");
+assert.equal(filaOf("financeiro"), "financeiro");
+{
+  const sub = [
+    mk("seguranca", true, "2026-11-18T10:00:00Z"),
+    mk("viagens", true, "2026-11-18T09:00:00Z"),
+    mk("compras", true, "2026-11-18T08:00:00Z"),
+    mk("promocao", true, "2026-11-18T07:00:00Z", "Loja <promo@loja.com>"),
+    mk("saude", true, "2026-11-18T06:00:00Z"),
+  ];
+  // default queue: informativo family never enters it; seguranca ranks as Ação, viagens as Agendamento, saude as Pessoal
+  assert.deepEqual(buildQueue(sub, null).map((i) => i.category), ["seguranca", "viagens", "saude"]);
+  // filtering by a queue includes its finer categories
+  assert.deepEqual(buildQueue(sub, "informativo").map((i) => i.category).sort(), ["compras", "promocao"]);
+  assert.equal(buildQueue(sub, "acao").length, 1);
+  const r = resumir(sub);
+  assert.equal(r.porCategoria.informativo, 2);
+  assert.equal(r.porCategoria.acao, 1);
+  assert.equal(r.porCategoria.agendamento, 1);
+  assert.equal(r.porCategoria.pessoal, 1);
+  assert.equal(r.importantesTotal, 2); // seguranca (Ação) + viagens (Agendamento)
+  assert.equal(agruparInformativos(sub).reduce((n, g) => n + g.qtd, 0), 2);
+}
 
 console.log("triage: ok");

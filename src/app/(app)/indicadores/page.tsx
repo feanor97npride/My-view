@@ -14,6 +14,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   trabalho: "Trabalho",
   pessoal: "Pessoal",
   informativo: "Informativo",
+  compras: "Compras",
+  viagens: "Viagens",
+  seguranca: "Segurança",
+  saude: "Saúde",
+  educacao: "Educação",
+  social: "Social",
+  promocao: "Promoções",
 };
 
 export default async function Indicadores() {

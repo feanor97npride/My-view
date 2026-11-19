@@ -1,12 +1,17 @@
 // Read-only Gmail metadata (sender, subject, date, unread) classified into categories.
 // Bodies are never fetched or stored. The short Gmail snippet is shown in the list but kept in memory only.
 import { neon } from "@neondatabase/serverless";
-import { CATEGORIES, categorize, isCategory, parseCategory, type Category } from "./email-rules";
+import { BULK_CATEGORIES, CATEGORIES, categorize, isCategory, parseCategory, type Category } from "./email-rules";
 import { pickAwaiting, type Awaiting, type EmailItem, type ThreadLike } from "./email-view";
 import { getEmailRules } from "./prefs";
 
 // Returns a category, or a short error code (stored in classified_by so failures are visible in the database).
-async function classifyWithAI(sender: string, subject: string): Promise<Category | string> {
+const MAX_BULK_AI = 15;
+const CATEGORY_HELP =
+  "acao = precisa de ação do destinatário; financeiro = cobranças, pagamentos, bancos; agendamento = reuniões, convites, reservas de horário; trabalho = relacionado a trabalho; pessoal = relacionamentos e vida pessoal; compras = pedidos, entregas e rastreio de compras; viagens = passagens, hotéis, check-in, roteiros; seguranca = alertas de login, códigos de verificação, redefinição de senha, atividade suspeita; saude = consultas, exames, planos de saúde, farmácia; educacao = cursos, aulas, escola, faculdade, certificados; social = redes sociais e comunidades (notificações, menções, convites de amizade); promocao = ofertas, cupons e marketing; informativo = só para saber, newsletters e avisos genéricos. Prefira a categoria mais específica quando ela claramente se aplica.";
+
+// `allowed` narrows the answer (bulk mail is only ever a handful of categories). Without it every category is allowed.
+async function classifyWithAI(sender: string, subject: string, allowed: readonly string[] = CATEGORIES): Promise<Category | string> {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
   if (!key) return "nokey";
   try {
@@ -19,7 +24,7 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
         messages: [
           {
             role: "user",
-            content: `Classifique este e-mail em UMA palavra: ${CATEGORIES.join(", ")}.\nacao = precisa de ação do destinatário; financeiro = cobranças, pagamentos, bancos; agendamento = reuniões, convites, reservas; trabalho = relacionado a trabalho; pessoal = relacionamentos e vida pessoal; informativo = só para saber.\nRemetente: ${sender}\nAssunto: ${subject}`,
+            content: `Classifique este e-mail em UMA palavra: ${allowed.join(", ")}.\n${CATEGORY_HELP}\nResponda apenas com a palavra.\nRemetente: ${sender}\nAssunto: ${subject}`,
           },
         ],
       }),
@@ -28,7 +33,7 @@ async function classifyWithAI(sender: string, subject: string): Promise<Category
     // Reads the text block wherever it is; records block types when no category is found, to diagnose the reply shape.
     const j = (await res.json()) as { content?: { type: string; text?: string }[] };
     const text = j.content?.find((b) => b.type === "text")?.text ?? "";
-    return parseCategory(text) ?? `badreply:${(j.content ?? []).map((b) => b.type).join("+") || "empty"}`;
+    return parseCategory(text, allowed) ?? `badreply:${(j.content ?? []).map((b) => b.type).join("+") || "empty"}`;
   } catch {
     // shortcut: any AI failure falls back to "informativo" so one bad key never blocks the inbox, upgrade to a retry queue when it matters
     return "network";
@@ -87,6 +92,7 @@ export async function syncEmails(token: string) {
   // Sequential on purpose: parallel bursts hit the API rate limit and fall back to "informativo".
   const rows: Record<string, unknown>[] = [];
   const emails: EmailItem[] = [];
+  let bulkBudget = MAX_BULK_AI;
   for (const m of msgs) {
     const h = (n: string) => m.payload.headers.find((x) => x.name === n)?.value ?? "";
     const sender = h("From");
@@ -96,7 +102,25 @@ export async function syncEmails(token: string) {
     let category = old?.category as Category | undefined;
     let by = old?.classified_by as string | undefined;
     const decided = categorize(sender, subject, hasUnsub, userRules);
-    if (decided) {
+    if (decided && decided.by === "rule:bulk") {
+      // Mass mail: the AI only separates it into compras / promoções / social / segurança / informativo.
+      // An earlier answer is kept, and at most MAX_BULK_AI new questions run per load so the page stays fast.
+      if (old?.classified_by === "ai:bulk" && (BULK_CATEGORIES as readonly string[]).includes(old.category as string)) {
+        category = old.category as Category;
+        by = "ai:bulk";
+      } else {
+        category = decided.category;
+        by = decided.by;
+        if (bulkBudget > 0) {
+          bulkBudget--;
+          const ai = await classifyWithAI(sender, subject, BULK_CATEGORIES);
+          if (isCategory(ai)) {
+            category = ai;
+            by = "ai:bulk";
+          }
+        }
+      }
+    } else if (decided) {
       category = decided.category;
       by = decided.by;
     } else if (!category || by?.startsWith("fallback") || by?.startsWith("rule")) {
@@ -148,7 +172,7 @@ export async function emailCounts(): Promise<Record<string, number>> {
 // Unread action e-mails from the database only (no Gmail call), cheap enough for the menu badge on every page.
 export async function unreadActionCount(): Promise<number> {
   const sql = neon(process.env.DATABASE_URL ?? "");
-  const rows = await sql`SELECT COUNT(*)::int AS n FROM emails WHERE unread AND category = 'acao' AND received_at > now() - interval '7 days'`;
+  const rows = await sql`SELECT COUNT(*)::int AS n FROM emails WHERE unread AND category IN ('acao', 'seguranca') AND received_at > now() - interval '7 days'`;
   return rows[0]?.n ?? 0;
 }
 

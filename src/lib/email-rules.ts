@@ -1,7 +1,12 @@
 // Pure e-mail classification rules (no Gmail, no database, no relative imports), testable in plain Node.
 
 // Categories the classifier can assign. "Aguardando resposta" is not one of them: it is computed from sent mail.
-export const CATEGORIES = ["acao", "financeiro", "agendamento", "trabalho", "pessoal", "informativo"] as const;
+// The first six are the triage queues. The rest are finer categories the AI can pick; each one rolls up
+// into one of those queues (see `filaOf` in triage.ts), so the queue strip and shortcuts stay the same.
+export const CATEGORIES = [
+  "acao", "financeiro", "agendamento", "trabalho", "pessoal", "informativo",
+  "compras", "viagens", "seguranca", "saude", "educacao", "social", "promocao",
+] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 export function isCategory(x: unknown): x is Category {
@@ -20,10 +25,15 @@ export function ruleCategory(sender: string, subject: string): Category | null {
   return KEYWORD_RULES.find(([, re]) => re.test(text))?.[0] ?? null;
 }
 
+// Bulk mail (it has an unsubscribe header) is only ever one of these, so the AI is asked a narrower question.
+export const BULK_CATEGORIES = ["informativo", "compras", "promocao", "social", "seguranca"] as const;
+
 // Finds a known category in the model's reply, ignoring accents and case ("Ação." -> acao).
-export function parseCategory(text: string): Category | null {
+// Whole words only: "educacao" must not match "acao". The first category word in the reply wins.
+export function parseCategory(text: string, allowed: readonly string[] = CATEGORIES): Category | null {
   const norm = text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  return CATEGORIES.find((c) => norm.includes(c)) ?? null;
+  const word = (norm.match(/[a-z]+/g) ?? []).find((w) => isCategory(w) && allowed.includes(w));
+  return (word as Category | undefined) ?? null;
 }
 
 export type EmailRule = { match: string; category: Category };

@@ -20,6 +20,13 @@ export const CATEGORY_LABEL: Record<string, string> = {
   pessoal: "Pessoal",
   aguardando: "Aguardando resposta",
   informativo: "Informativo",
+  compras: "Compras",
+  viagens: "Viagens",
+  seguranca: "Segurança",
+  saude: "Saúde",
+  educacao: "Educação",
+  social: "Social",
+  promocao: "Promoções",
 };
 
 export const CATEGORY_CHIP: Record<string, string> = {
@@ -30,6 +37,13 @@ export const CATEGORY_CHIP: Record<string, string> = {
   pessoal: "chip-pink",
   aguardando: "chip-teal",
   informativo: "chip-slate",
+  compras: "chip-amber",
+  viagens: "chip-blue",
+  seguranca: "chip-red",
+  saude: "chip-teal",
+  educacao: "chip-violet",
+  social: "chip-pink",
+  promocao: "chip-slate",
 };
 
 // "Nome <a@b.com>", '"Nome" <a@b.com>', "<a@b.com>" or "a@b.com" -> display name and address.
