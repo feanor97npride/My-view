@@ -271,6 +271,36 @@ export default function TriageBoard({
     });
   };
 
+  const toggleReadFocus = (item: TriItem) => {
+    setActionError(null);
+    const nextUnread = !item.unread;
+    const nextItem = !nextUnread ? (queue.find((i) => i.id !== item.id) ?? null) : null;
+    const apply = (unreadVal: boolean, focusTarget: string | null) => {
+      setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, unread: unreadVal } : x)));
+      if (focusTarget !== undefined) setFocusId(focusTarget);
+    };
+    const commit = () => {
+      setLeaving(false);
+      apply(nextUnread, !nextUnread ? (nextItem?.id ?? null) : item.id);
+      const undo = () => {
+        apply(item.unread, item.id);
+        void postAction({ action: item.unread ? "markUnread" : "markRead", ids: [item.id] }).then((u) => {
+          if (!u.ok) setActionError(u.error);
+        });
+      };
+      showToast(nextUnread ? "Marcado como não lido" : "Marcado como lido", undo);
+      void postAction({ action: nextUnread ? "markUnread" : "markRead", ids: [item.id] }).then((r) => {
+        if (!r.ok) {
+          setToast(null);
+          apply(item.unread, item.id);
+          setActionError(r.error);
+        }
+      });
+    };
+    if (!nextUnread) advanceWithMotion(commit);
+    else commit();
+  };
+
   const markInformativosRead = () => {
     const ids = unreadInformativos.map((i) => i.id);
     if (ids.length === 0) return;
@@ -775,6 +805,13 @@ export default function TriageBoard({
                     </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleReadFocus(focus)}
+                      className="btn spring-btn min-h-8 px-2.5 py-1 text-xs"
+                    >
+                      {focus.unread ? "✓ Marcar lido" : "Marcar não lido"}
+                    </button>
                     <span className="text-[11px] text-mute">Soneca:</span>
                     <button
                       type="button"
