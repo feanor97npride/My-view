@@ -11,6 +11,43 @@ type Command = {
   run: () => void;
 };
 
+export function CommandTrigger({ compact = false }: { compact?: boolean }) {
+  const openPalette = () => window.dispatchEvent(new CustomEvent("myview:open-command-palette"));
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={openPalette}
+        aria-label="Abrir busca rápida"
+        className="btn spring-btn min-h-10 px-2.5"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={openPalette}
+      className="spring-btn flex w-full cursor-pointer items-center justify-between rounded-xl border border-line bg-bg px-3 py-2 text-xs text-mute transition-colors hover:border-primary/50 hover:text-ink"
+    >
+      <span className="inline-flex items-center gap-2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
+        Busca rápida
+      </span>
+      <kbd className="rounded border border-line-strong bg-card px-1.5 py-0.5 text-[10px] font-semibold">⌘K</kbd>
+    </button>
+  );
+}
+
 export default function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -65,8 +102,13 @@ export default function CommandPalette() {
         setOpen(false);
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onOpen = () => setOpen(true);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("myview:open-command-palette", onOpen);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("myview:open-command-palette", onOpen);
+    };
   }, []);
 
   useEffect(() => {

@@ -1,11 +1,12 @@
 import { auth, signOut } from "@/auth";
-import { upcomingTimed } from "@/lib/calendar";
+import { primaryTz, upcomingTimed } from "@/lib/calendar";
 import { urgentTasksCount } from "@/lib/clickup";
 import { unreadActionCount } from "@/lib/gmail";
 import { getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
-import CommandPalette from "@/components/command-palette";
+import CommandPalette, { CommandTrigger } from "@/components/command-palette";
 import MeetingBanner from "@/components/meeting-banner";
 import NavLinks from "@/components/nav-links";
+import SidebarShell, { type SidebarMeeting } from "@/components/sidebar-shell";
 import ThemeToggle from "@/components/theme-toggle";
 
 function Brand() {
@@ -30,7 +31,7 @@ function SignOut() {
         await signOut({ redirectTo: "/login" });
       }}
     >
-      <button type="submit" className="btn min-h-10 px-3 text-[13px]">Sair</button>
+      <button type="submit" className="btn spring-btn min-h-10 px-3 text-[13px]">Sair</button>
     </form>
   );
 }
@@ -42,8 +43,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [mailCount, taskCount] = await Promise.all([unreadActionCount().catch(() => 0), urgentTasksCount().catch(() => 0)]);
   const windowMin = await getMeetingWindow().catch(() => 30);
   const selected = await getSelectedCalendars().catch(() => null);
-  const meetings = session?.accessToken ? await upcomingTimed(session.accessToken, selected).catch(() => []) : [];
+  const [meetings, tz] = await Promise.all([
+    session?.accessToken ? upcomingTimed(session.accessToken, selected).catch(() => []) : Promise.resolve([]),
+    session?.accessToken ? primaryTz(session.accessToken).catch(() => "UTC") : Promise.resolve("UTC"),
+  ]);
   const badges: Record<string, number> = { "/": taskCount, "/emails": mailCount };
+
+  const nowMs = Date.now();
+  const nextRaw = meetings[0];
+  const nextMeeting: SidebarMeeting | null = nextRaw
+    ? {
+        title: nextRaw.title,
+        isNow: new Date(nextRaw.start).getTime() <= nowMs,
+        timeLabel: new Date(nextRaw.start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: tz }),
+      }
+    : null;
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -53,26 +67,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Pular para o conteúdo
       </a>
-      <aside className="hidden w-[248px] shrink-0 flex-col gap-7 border-r border-line bg-card p-5 md:flex">
-        <Brand />
-        <NavLinks variant="side" badges={badges} />
-        <p className="m-0 flex items-center justify-between rounded-xl border border-line bg-bg px-3 py-2 text-xs text-mute">
-          <span>Busca rápida</span>
-          <kbd className="rounded border border-line-strong bg-card px-1.5 py-0.5 text-[10px] font-semibold">⌘K</kbd>
-        </p>
-        <div className="mt-auto flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft font-bold text-primary-ink" aria-hidden="true">
-            {name.charAt(0).toUpperCase()}
-          </span>
-          <span className="flex-1 truncate font-semibold">{name.split(" ")[0]}</span>
-          <ThemeToggle />
-          <SignOut />
-        </div>
-      </aside>
+      <SidebarShell
+        badges={badges}
+        nextMeeting={nextMeeting}
+        userName={name}
+        themeToggle={<ThemeToggle />}
+        signOut={<SignOut />}
+      />
 
       <header className="flex items-center justify-between border-b border-line bg-card px-4 py-3 md:hidden">
         <Brand />
         <div className="flex items-center gap-2">
+          <CommandTrigger compact />
           <ThemeToggle />
           <SignOut />
         </div>
