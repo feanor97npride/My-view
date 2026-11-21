@@ -65,6 +65,16 @@ export default function CommandPalette() {
   const commands: Command[] = useMemo(
     () => [
       {
+        id: "assistant",
+        label: "✨ Abrir Assistente Pessoal",
+        group: "Produtividade",
+        keywords: "ia chat copiloto assistente lembrar",
+        run: () => {
+          setOpen(false);
+          window.dispatchEvent(new CustomEvent("myview:open-assistant"));
+        },
+      },
+      {
         id: "new-task",
         label: "+ Nova tarefa rápida (ClickUp)",
         group: "Produtividade",

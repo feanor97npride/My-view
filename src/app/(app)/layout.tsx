@@ -5,6 +5,7 @@ import { urgentTasksCount } from "@/lib/clickup";
 import { unreadActionCount } from "@/lib/gmail";
 import { getMeetingWindow, getSelectedCalendars } from "@/lib/prefs";
 import AlertsPopup from "@/components/alerts-popup";
+import AssistantDrawer, { AssistantTrigger } from "@/components/assistant-drawer";
 import CommandPalette, { CommandTrigger } from "@/components/command-palette";
 import MeetingBanner from "@/components/meeting-banner";
 import NavLinks from "@/components/nav-links";
@@ -128,6 +129,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="flex items-center justify-between border-b border-line bg-card px-4 py-3 md:hidden">
         <Brand />
         <div className="flex items-center gap-2">
+          <AssistantTrigger compact />
           <CommandTrigger compact />
           <ThemeToggle />
           <SignOut />
@@ -150,6 +152,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <LiveAlertsPopup />
       </Suspense>
       <CommandPalette />
+      <AssistantDrawer />
     </div>
   );
 }

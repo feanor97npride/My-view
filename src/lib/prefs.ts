@@ -21,6 +21,7 @@ const DAY_PLAN = "day_plan";
 const QUICK_NOTES = "quick_notes";
 const SNOOZED_EMAILS = "snoozed_emails";
 const REPLY_TEMPLATES = "reply_templates";
+const ASSISTANT_MEMORY = "assistant_memory";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
 
@@ -225,4 +226,23 @@ export async function setReplyTemplates(list: ReplyTemplate[]): Promise<void> {
     .filter((x) => x.label && x.body)
     .slice(0, 10);
   await upsertPref(REPLY_TEMPLATES, clean);
+}
+
+export async function getAssistantMemory(): Promise<string[]> {
+  const map = await loadPrefsMap();
+  const raw = map[ASSISTANT_MEMORY];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 25);
+}
+
+export async function setAssistantMemory(facts: string[]): Promise<void> {
+  const clean = [...new Set(facts.map((f) => f.trim().slice(0, 200)).filter(Boolean))].slice(0, 25);
+  await upsertPref(ASSISTANT_MEMORY, clean);
+}
+
+export async function addAssistantMemory(fact: string): Promise<string[]> {
+  const current = await getAssistantMemory();
+  const next = [...current, fact.trim().slice(0, 200)];
+  await setAssistantMemory(next);
+  return getAssistantMemory();
 }

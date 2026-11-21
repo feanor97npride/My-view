@@ -122,6 +122,26 @@ export default function SidebarShell({
         )}
       </button>
 
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent("myview:open-assistant"))}
+        title={collapsed ? `Assistente (${shortcut.replace("K", "J")})` : undefined}
+        aria-label="Abrir Assistente Pessoal"
+        className={`spring-btn flex cursor-pointer items-center rounded-xl border border-primary/30 bg-primary-soft/70 py-2 text-xs font-semibold text-primary-ink transition-colors hover:border-primary hover:bg-primary-soft ${
+          collapsed ? "justify-center px-2" : "justify-between px-3"
+        }`}
+      >
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden="true">✨</span>
+          {!collapsed && <span>Assistente</span>}
+        </span>
+        {!collapsed && (
+          <kbd className="rounded border border-primary/30 bg-card px-1.5 py-0.5 text-[10px] font-semibold text-primary-ink">
+            {shortcut.replace("K", "J")}
+          </kbd>
+        )}
+      </button>
+
       {!collapsed && (
         <div className="rounded-2xl border border-line p-3 text-xs" style={{ background: "var(--surface-3)" }}>
           <div className="mb-1 flex items-center justify-between gap-2">
