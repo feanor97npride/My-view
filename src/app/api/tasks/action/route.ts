@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { primaryTz } from "@/lib/calendar";
 import { closingStatus, createClickupTask, getClickupTask, inScopeList, listStatuses, updateClickupTask } from "@/lib/clickup";
+import { markEmailsRead } from "@/lib/gmail";
+import { originsByTask } from "@/lib/links";
 import { getDefaultClickupList } from "@/lib/prefs";
 import { dayKey, dueForKey, isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
 
@@ -64,6 +66,11 @@ export async function POST(req: Request) {
       const closing = closingStatus(await listStatuses(snap.listId));
       if (!closing) return NextResponse.json({ error: "Esta lista não tem um status de conclusão." }, { status: 400 });
       await updateClickupTask(body.taskId, { status: closing });
+      const origins = await originsByTask([body.taskId]).catch(() => ({} as Awaited<ReturnType<typeof originsByTask>>));
+      const origin = origins[body.taskId];
+      if (origin?.emailId) {
+        await markEmailsRead(token, [origin.emailId]).catch(() => {});
+      }
       revalidateTag("tasks");
       return NextResponse.json({ ok: true, prevStatus: snap.status, status: closing });
     }

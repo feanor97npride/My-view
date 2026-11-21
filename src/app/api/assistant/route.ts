@@ -6,10 +6,12 @@ import { closingStatus, createClickupTask, getClickupTask, inScopeList, listStat
 import { createTemplateDraft, markEmailsRead, syncEmails } from "@/lib/gmail";
 import {
   addAssistantMemory,
+  getAssistantHistory,
   getAssistantMemory,
   getDefaultClickupList,
   getQuickNotes,
   getSelectedCalendars,
+  setAssistantHistory,
   setAssistantMemory,
   setQuickNotes,
 } from "@/lib/prefs";
@@ -126,8 +128,11 @@ export async function GET() {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
   }
-  const memory = await getAssistantMemory().catch(() => []);
-  return NextResponse.json({ memory });
+  const [memory, history] = await Promise.all([
+    getAssistantMemory().catch(() => []),
+    getAssistantHistory().catch(() => []),
+  ]);
+  return NextResponse.json({ memory, history });
 }
 
 export async function DELETE(req: Request) {
@@ -136,6 +141,10 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
   }
   const url = new URL(req.url);
+  if (url.searchParams.get("clear") === "history") {
+    await setAssistantHistory([]);
+    return NextResponse.json({ history: [] });
+  }
   const idx = Number(url.searchParams.get("index"));
   const current = await getAssistantMemory().catch(() => []);
   if (!Number.isInteger(idx) || idx < 0 || idx >= current.length) {
@@ -256,12 +265,17 @@ ${notes.trim() ? notes.slice(0, 600) : "(vazio)"}`;
     const toolUses = blocks.filter((b): b is Extract<AnthropicBlock, { type: "tool_use" }> => b.type === "tool_use");
 
     if (toolUses.length === 0) {
-      const reply = blocks
-        .filter((b): b is Extract<AnthropicBlock, { type: "text" }> => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .trim();
-      return NextResponse.json({ reply: reply || "Pronto!", actions: actionsDone, memory: currentMemory });
+      const replyText =
+        blocks
+          .filter((b): b is Extract<AnthropicBlock, { type: "text" }> => b.type === "text")
+          .map((b) => b.text)
+          .join("\n")
+          .trim() || "Pronto!";
+      await setAssistantHistory([
+        ...history,
+        { role: "assistant", content: replyText, ...(actionsDone.length ? { actions: actionsDone } : {}) },
+      ]).catch(() => {});
+      return NextResponse.json({ reply: replyText, actions: actionsDone, memory: currentMemory });
     }
 
     anthropicMessages.push({ role: "assistant", content: blocks });

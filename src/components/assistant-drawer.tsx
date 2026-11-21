@@ -79,10 +79,12 @@ export default function AssistantDrawer() {
     setTimeout(() => inputRef.current?.focus(), 20);
     fetch("/api/assistant")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { memory?: string[] } | null) => {
+      .then((d: { memory?: string[]; history?: Msg[] } | null) => {
         if (d?.memory) setMemory(d.memory);
+        if (d?.history && messages.length === 0) setMessages(d.history);
       })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -90,6 +92,11 @@ export default function AssistantDrawer() {
   }, [messages, sending]);
 
   if (!open) return null;
+
+  const clearHistory = async () => {
+    setMessages([]);
+    await fetch("/api/assistant?clear=history", { method: "DELETE" }).catch(() => {});
+  };
 
   const send = async (textOverride?: string) => {
     const content = (textOverride ?? input).trim();
@@ -161,6 +168,16 @@ export default function AssistantDrawer() {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void clearHistory()}
+                title="Limpar conversa"
+                className="btn spring-btn min-h-8 px-2.5 py-1 text-xs text-mute"
+              >
+                Limpar
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setShowMem((v) => !v)}

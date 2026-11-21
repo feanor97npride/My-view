@@ -22,8 +22,10 @@ const QUICK_NOTES = "quick_notes";
 const SNOOZED_EMAILS = "snoozed_emails";
 const REPLY_TEMPLATES = "reply_templates";
 const ASSISTANT_MEMORY = "assistant_memory";
+const ASSISTANT_HISTORY = "assistant_history";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
+export type StoredChatMsg = { role: "user" | "assistant"; content: string; actions?: string[] };
 
 export const DEFAULT_REPLY_TEMPLATES: ReplyTemplate[] = [
   {
@@ -245,4 +247,31 @@ export async function addAssistantMemory(fact: string): Promise<string[]> {
   const next = [...current, fact.trim().slice(0, 200)];
   await setAssistantMemory(next);
   return getAssistantMemory();
+}
+
+export async function getAssistantHistory(): Promise<StoredChatMsg[]> {
+  const map = await loadPrefsMap();
+  const raw = map[ASSISTANT_HISTORY];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (m): m is StoredChatMsg =>
+        !!m &&
+        typeof m === "object" &&
+        ((m as StoredChatMsg).role === "user" || (m as StoredChatMsg).role === "assistant") &&
+        typeof (m as StoredChatMsg).content === "string",
+    )
+    .slice(-20);
+}
+
+export async function setAssistantHistory(messages: StoredChatMsg[]): Promise<void> {
+  const clean = messages
+    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim().length > 0)
+    .slice(-20)
+    .map((m) => ({
+      role: m.role,
+      content: m.content.slice(0, 4000),
+      ...(m.actions?.length ? { actions: m.actions.slice(0, 10) } : {}),
+    }));
+  await upsertPref(ASSISTANT_HISTORY, clean);
 }
