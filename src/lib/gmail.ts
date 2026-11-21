@@ -487,14 +487,14 @@ export async function generateDailyBriefingWithAI(input: {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
       model: "claude-haiku-5-5",
-      max_tokens: 600,
+      max_tokens: 1400,
       messages: [
         {
           role: "user",
-          content: `Faça um briefing executivo do dia em português em exatamente 3 tópicos curtos (começando com "• "), indicando por onde começar e o maior risco/prioridade.\n\nAgenda:\n${evTxt}\n\nTarefas:\n${tkTxt}\n\nE-mails de ação:\n${emTxt}`,
+          content: `Faça um briefing executivo do dia em português em exatamente 3 tópicos curtos e completos (começando com "• "), indicando por onde começar, o maior risco/prioridade e o próximo passo prático. Não corte frases.\n\nAgenda:\n${evTxt}\n\nTarefas:\n${tkTxt}\n\nE-mails de ação:\n${emTxt}`,
         },
       ],
     }),

@@ -123,7 +123,17 @@ export default function DailyBriefing({
       {error && <p className="m-0 text-xs" style={{ color: "var(--red-fg)" }}>{error}</p>}
       {text && !collapsed && (
         <div className="rounded-2xl border border-primary/25 bg-primary-soft/50 px-3.5 py-2.5 text-xs leading-relaxed text-ink">
-          <p className="m-0 whitespace-pre-wrap">{text}</p>
+          <p className="m-0 whitespace-pre-wrap">
+            {text.split(/(\*\*[^*]+\*\*)/g).map((part, idx) =>
+              part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+                <strong key={idx} className="font-semibold text-ink">
+                  {part.slice(2, -2)}
+                </strong>
+              ) : (
+                part
+              ),
+            )}
+          </p>
         </div>
       )}
     </div>
