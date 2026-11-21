@@ -101,6 +101,7 @@ export default function CommandPalette() {
       { id: "emails", label: "Ir para E-mails", group: "Navegação", keywords: "triagem inbox gmail", run: () => { setOpen(false); router.push("/emails"); } },
       { id: "emails-acao", label: "E-mails: Fila Ação", group: "E-mails", keywords: "urgente responder", run: () => { setOpen(false); router.push("/emails?categoria=acao"); } },
       { id: "emails-fin", label: "E-mails: Fila Financeiro", group: "E-mails", keywords: "boletos contas pagar", run: () => { setOpen(false); router.push("/emails?categoria=financeiro"); } },
+      { id: "github", label: "Ir para GitHub Live", group: "Navegação", keywords: "repositorios commits actions ci", run: () => { setOpen(false); router.push("/github"); } },
       { id: "indicadores", label: "Ir para Indicadores", group: "Navegação", keywords: "metricas grafico saude", run: () => { setOpen(false); router.push("/indicadores"); } },
       { id: "config", label: "Ir para Configurações", group: "Navegação", keywords: "preferencias regras clickup", run: () => { setOpen(false); router.push("/configuracoes"); } },
       {

@@ -24,6 +24,7 @@ const REPLY_TEMPLATES = "reply_templates";
 const ASSISTANT_MEMORY = "assistant_memory";
 const ASSISTANT_HISTORY = "assistant_history";
 const OBSIDIAN_VAULT = "obsidian_vault";
+const GITHUB_TOKEN = "github_token";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
 export type StoredChatMsg = { role: "user" | "assistant"; content: string; actions?: string[] };
@@ -284,4 +285,23 @@ export async function getObsidianVault(): Promise<string> {
 
 export async function setObsidianVault(vault: string): Promise<void> {
   await upsertPref(OBSIDIAN_VAULT, vault.trim().slice(0, 100));
+}
+
+export async function getUserGithubToken(): Promise<string | null> {
+  const email = await getCurrentUserEmail();
+  const map = await loadPrefsMap();
+  if (GITHUB_TOKEN in map) {
+    const val = typeof map[GITHUB_TOKEN] === "string" ? map[GITHUB_TOKEN].trim() : "";
+    return val || null;
+  }
+  const primary = primaryAllowedEmail();
+  if (!primary || email === primary) {
+    return process.env.GITHUB_TOKEN?.trim() || null;
+  }
+  return null;
+}
+
+export async function setUserGithubToken(token: string): Promise<void> {
+  await upsertPref(GITHUB_TOKEN, token.trim());
+  revalidateTag("github");
 }
