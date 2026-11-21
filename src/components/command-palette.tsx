@@ -98,6 +98,7 @@ export default function CommandPalette() {
       },
       { id: "hoje", label: "Ir para Hoje", group: "Navegação", keywords: "inicio cockpit agenda tarefas", run: () => { setOpen(false); router.push("/"); } },
       { id: "semana", label: "Ir para Semana", group: "Navegação", keywords: "calendario carga dias", run: () => { setOpen(false); router.push("/semana"); } },
+      { id: "clickup", label: "Ir para ClickUp", group: "Navegação", keywords: "tarefas sprint listas kanban", run: () => { setOpen(false); router.push("/clickup"); } },
       { id: "emails", label: "Ir para E-mails", group: "Navegação", keywords: "triagem inbox gmail", run: () => { setOpen(false); router.push("/emails"); } },
       { id: "emails-acao", label: "E-mails: Fila Ação", group: "E-mails", keywords: "urgente responder", run: () => { setOpen(false); router.push("/emails?categoria=acao"); } },
       { id: "emails-fin", label: "E-mails: Fila Financeiro", group: "E-mails", keywords: "boletos contas pagar", run: () => { setOpen(false); router.push("/emails?categoria=financeiro"); } },
