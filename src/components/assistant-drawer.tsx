@@ -3,15 +3,27 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { openInObsidian } from "@/lib/obsidian";
+import { canSpeak, speakPtBr, stopSpeaking } from "@/lib/voice";
 
 type Msg = { role: "user" | "assistant"; content: string; actions?: string[] };
 
 const SUGGESTIONS = [
+  "Quais são minhas tarefas do dia?",
   "O que tenho hoje e onde encaixo 1h de foco?",
-  "Quais são minhas prioridades agora?",
   "Cria uma tarefa para amanhã: revisar pendências",
   "Lembre que prefiro foco de manhã sem reuniões",
 ];
+
+type SpeechRecLike = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
 
 export function AssistantTrigger({ compact = false }: { compact?: boolean }) {
   const openDrawer = () => window.dispatchEvent(new CustomEvent("myview:open-assistant"));
@@ -54,10 +66,22 @@ export default function AssistantDrawer() {
   const [error, setError] = useState<string | null>(null);
   const [memory, setMemory] = useState<string[]>([]);
   const [showMem, setShowMem] = useState(false);
+  const [voiceAuto, setVoiceAuto] = useState(true);
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  const [listening, setListening] = useState(false);
+  const [hasMic, setHasMic] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const recRef = useRef<SpeechRecLike | null>(null);
 
   useEffect(() => {
+    try {
+      if (localStorage.getItem("myview:assistant-voice") === "0") setVoiceAuto(false);
+    } catch {
+      // ignore
+    }
+    const w = window as unknown as { SpeechRecognition?: new () => SpeechRecLike; webkitSpeechRecognition?: new () => SpeechRecLike };
+    setHasMic(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
@@ -72,11 +96,16 @@ export default function AssistantDrawer() {
     return () => {
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("myview:open-assistant", onOpen);
+      stopSpeaking();
     };
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      stopSpeaking();
+      setSpeakingIdx(null);
+      return;
+    }
     setTimeout(() => inputRef.current?.focus(), 20);
     fetch("/api/assistant")
       .then((r) => (r.ok ? r.json() : null))
@@ -94,7 +123,37 @@ export default function AssistantDrawer() {
 
   if (!open) return null;
 
+  const toggleVoiceAuto = () => {
+    setVoiceAuto((v) => {
+      const next = !v;
+      if (!next) {
+        stopSpeaking();
+        setSpeakingIdx(null);
+      }
+      try {
+        localStorage.setItem("myview:assistant-voice", next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const speakMessage = (idx: number, content: string) => {
+    if (speakingIdx === idx) {
+      stopSpeaking();
+      setSpeakingIdx(null);
+      return;
+    }
+    speakPtBr(content, {
+      onStart: () => setSpeakingIdx(idx),
+      onEnd: () => setSpeakingIdx((cur) => (cur === idx ? null : cur)),
+    });
+  };
+
   const clearHistory = async () => {
+    stopSpeaking();
+    setSpeakingIdx(null);
     setMessages([]);
     await fetch("/api/assistant?clear=history", { method: "DELETE" }).catch(() => {});
   };
@@ -126,10 +185,18 @@ export default function AssistantDrawer() {
         return;
       }
       if (j.memory) setMemory(j.memory);
+      const replyText = j.reply ?? "Pronto!";
+      const replyIdx = nextHistory.length;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: j.reply ?? "Pronto!", actions: j.actions },
+        { role: "assistant", content: replyText, actions: j.actions },
       ]);
+      if (voiceAuto && canSpeak()) {
+        speakPtBr(replyText, {
+          onStart: () => setSpeakingIdx(replyIdx),
+          onEnd: () => setSpeakingIdx((cur) => (cur === replyIdx ? null : cur)),
+        });
+      }
       if (j.actions && j.actions.length > 0) {
         router.refresh();
       }
@@ -138,6 +205,33 @@ export default function AssistantDrawer() {
     } finally {
       setSending(false);
     }
+  };
+
+  const toggleMic = () => {
+    if (listening && recRef.current) {
+      recRef.current.stop();
+      setListening(false);
+      return;
+    }
+    const w = window as unknown as { SpeechRecognition?: new () => SpeechRecLike; webkitSpeechRecognition?: new () => SpeechRecLike };
+    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!Ctor) return;
+    stopSpeaking();
+    const rec = new Ctor();
+    rec.lang = "pt-BR";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (ev) => {
+      const transcript = ev.results[0]?.[0]?.transcript?.trim();
+      if (transcript) {
+        void send(transcript);
+      }
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    recRef.current = rec;
+    setListening(true);
+    rec.start();
   };
 
   const removeMemory = async (index: number) => {
@@ -169,6 +263,16 @@ export default function AssistantDrawer() {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            {canSpeak() && (
+              <button
+                type="button"
+                onClick={toggleVoiceAuto}
+                title={voiceAuto ? "Desativar voz automática" : "Ativar voz automática"}
+                className={`btn spring-btn min-h-8 px-2 py-1 text-xs ${voiceAuto ? "border-primary bg-primary-soft text-primary-ink" : "text-mute"}`}
+              >
+                {voiceAuto ? "🔊 Voz" : "🔇"}
+              </button>
+            )}
             {messages.length > 0 && (
               <button
                 type="button"
@@ -228,7 +332,7 @@ export default function AssistantDrawer() {
           {messages.length === 0 ? (
             <div className="flex flex-col gap-3">
               <p className="m-0 text-sm text-mute">
-                Peça para consultar seu dia, agendar blocos de foco, criar/adiar tarefas no ClickUp, gerar rascunhos no Gmail ou salvar preferências.
+                Peça por texto ou voz para consultar suas tarefas do dia, agendar blocos de foco, responder e-mails ou salvar lembretes.
               </p>
               <div className="flex flex-col gap-2">
                 {SUGGESTIONS.map((s) => (
@@ -268,18 +372,29 @@ export default function AssistantDrawer() {
                   </div>
                 )}
                 {m.role === "assistant" && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openInObsidian({
-                        title: `Assistente ${new Date().toISOString().slice(0, 10)}`,
-                        content: m.content,
-                      })
-                    }
-                    className="cursor-pointer border-0 bg-transparent px-1 py-0.5 text-[11px] font-medium text-mute hover:text-ink"
-                  >
-                    📓 Salvar no Obsidian
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {canSpeak() && (
+                      <button
+                        type="button"
+                        onClick={() => speakMessage(i, m.content)}
+                        className="cursor-pointer border-0 bg-transparent px-1 py-0.5 text-[11px] font-medium text-mute hover:text-ink"
+                      >
+                        {speakingIdx === i ? "⏹ Parar" : "🔊 Ouvir"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openInObsidian({
+                          title: `Assistente ${new Date().toISOString().slice(0, 10)}`,
+                          content: m.content,
+                        })
+                      }
+                      className="cursor-pointer border-0 bg-transparent px-1 py-0.5 text-[11px] font-medium text-mute hover:text-ink"
+                    >
+                      📓 Salvar no Obsidian
+                    </button>
+                  </div>
                 )}
               </div>
             ))
@@ -304,12 +419,26 @@ export default function AssistantDrawer() {
           }}
           className="flex items-center gap-2 border-t border-line p-4"
         >
+          {hasMic && (
+            <button
+              type="button"
+              onClick={toggleMic}
+              disabled={sending}
+              title={listening ? "Parar gravação" : "Falar com o assistente"}
+              aria-label={listening ? "Parar gravação" : "Falar com o assistente"}
+              className={`btn spring-btn min-h-11 px-3 text-sm ${
+                listening ? "animate-pulse border-red-500 bg-red-500/10 text-red-600" : ""
+              }`}
+            >
+              🎤
+            </button>
+          )}
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Peça algo ao seu assistente…"
+            placeholder={listening ? "Ouvindo você…" : "Peça algo ao seu assistente…"}
             className="min-h-11 flex-1 rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary"
           />
           <button

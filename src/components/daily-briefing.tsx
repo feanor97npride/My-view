@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { openInObsidian } from "@/lib/obsidian";
+import { canSpeak, speakPtBr, stopSpeaking } from "@/lib/voice";
 
 type BriefingPayload = {
   events: { time: string; title: string }[];
@@ -25,6 +26,7 @@ export default function DailyBriefing({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
     try {
@@ -33,6 +35,7 @@ export default function DailyBriefing({
     } catch {
       // ignore storage errors
     }
+    return () => stopSpeaking();
   }, [storageKey]);
 
   const generate = async () => {
@@ -77,6 +80,22 @@ export default function DailyBriefing({
         </button>
         {text && (
           <>
+            {canSpeak() && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (speaking) {
+                    stopSpeaking();
+                    setSpeaking(false);
+                  } else {
+                    speakPtBr(text, { onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
+                  }
+                }}
+                className="btn spring-btn min-h-8 px-2.5 py-1 text-xs"
+              >
+                {speaking ? "⏹ Parar" : "🔊 Ouvir"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() =>

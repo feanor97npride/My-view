@@ -10,6 +10,7 @@ import QuickNotes from "@/components/quick-notes";
 import Reconnect from "@/components/reconnect";
 import RefreshButton from "@/components/refresh-button";
 import RetryNotice from "@/components/retry-notice";
+import SpeakDayButton from "@/components/speak-day-button";
 import TodayTasks from "@/components/today-tasks";
 import { busyHours, timeline } from "@/lib/calendar";
 import { cachedListStatuses, openTasks } from "@/lib/clickup";
@@ -175,6 +176,23 @@ export default async function Home() {
   const totalEvents = (today?.events ?? []).filter((e) => !e.allDay).length;
   const totalGoal = totalEvents + urgent.length;
 
+  const voiceParts: string[] = [
+    `${greeting}${first ? `, ${first}` : ""}.`,
+    today && today.events.length > 0
+      ? `Hoje você tem ${today.events.length} ${today.events.length === 1 ? "compromisso" : "compromissos"} na agenda${nextEvent ? `, o próximo às ${fmt(nextEvent.start)}: ${nextEvent.title}` : ""}.`
+      : "Sua agenda está livre hoje.",
+    urgent.length > 0
+      ? `Você tem ${urgent.length} ${urgent.length === 1 ? "tarefa" : "tarefas"} para hoje ou atrasadas: ${urgent
+          .slice(0, 5)
+          .map((t, i) => `${i + 1}, ${t.title}`)
+          .join(". ")}.`
+      : "Nenhuma tarefa pendente para hoje.",
+    actions.length > 0
+      ? `E ${actions.length} ${actions.length === 1 ? "e-mail de ação" : "e-mails de ação"} por ler.`
+      : "",
+  ];
+  const voiceScript = voiceParts.filter(Boolean).join(" ");
+
   return (
     <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 p-4 md:px-8 md:py-8 xl:px-10">
       {/* Hero Bento: Saudação + Resumo/Alertas + 4 KPIs integrados + Anel do dia */}
@@ -187,11 +205,14 @@ export default async function Home() {
             </span>
           </div>
 
-          <div>
-            <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
-              {greeting}{first && `, ${first}`}
-            </h1>
-            {summary && <p className="mt-1 mb-0 text-sm text-mute">{summary}</p>}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+                {greeting}{first && `, ${first}`}
+              </h1>
+              {summary && <p className="mt-1 mb-0 text-sm text-mute">{summary}</p>}
+            </div>
+            <SpeakDayButton script={voiceScript} />
           </div>
 
           <div className="flex flex-col gap-1 empty:hidden">
