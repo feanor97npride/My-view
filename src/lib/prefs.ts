@@ -25,6 +25,7 @@ const ASSISTANT_MEMORY = "assistant_memory";
 const ASSISTANT_HISTORY = "assistant_history";
 const OBSIDIAN_VAULT = "obsidian_vault";
 const GITHUB_TOKEN = "github_token";
+const GOOGLE_TTS_KEY = "google_tts_key";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
 export type StoredChatMsg = { role: "user" | "assistant"; content: string; actions?: string[] };
@@ -304,4 +305,22 @@ export async function getUserGithubToken(): Promise<string | null> {
 export async function setUserGithubToken(token: string): Promise<void> {
   await upsertPref(GITHUB_TOKEN, token.trim());
   revalidateTag("github");
+}
+
+export async function getUserGoogleTtsKey(): Promise<string | null> {
+  const email = await getCurrentUserEmail();
+  const map = await loadPrefsMap();
+  if (GOOGLE_TTS_KEY in map) {
+    const val = typeof map[GOOGLE_TTS_KEY] === "string" ? map[GOOGLE_TTS_KEY].trim() : "";
+    return val || null;
+  }
+  const primary = primaryAllowedEmail();
+  if (!primary || email === primary) {
+    return process.env.GOOGLE_TTS_API_KEY?.trim() || null;
+  }
+  return null;
+}
+
+export async function setUserGoogleTtsKey(key: string): Promise<void> {
+  await upsertPref(GOOGLE_TTS_KEY, key.trim());
 }

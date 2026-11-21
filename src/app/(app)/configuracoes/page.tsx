@@ -8,7 +8,7 @@ import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs } from "@/lib/task-dates";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getReplyTemplates, getSelectedCalendars, getUserClickupToken, getUserGithubToken, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setReplyTemplates, setSelectedCalendars, setUserClickupToken, setUserGithubToken } from "@/lib/prefs";
+import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getReplyTemplates, getSelectedCalendars, getUserClickupToken, getUserGithubToken, getUserGoogleTtsKey, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setReplyTemplates, setSelectedCalendars, setUserClickupToken, setUserGithubToken, setUserGoogleTtsKey } from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -66,6 +66,15 @@ async function saveGithubToken(formData: FormData) {
   await setUserGithubToken(String(formData.get("ghToken") ?? ""));
   revalidatePath("/", "layout");
   redirect("/configuracoes?gh=ok");
+}
+
+async function saveGoogleTtsKey(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  await setUserGoogleTtsKey(String(formData.get("ttsKey") ?? ""));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?tts=ok");
 }
 
 async function saveShortcuts(formData: FormData) {
@@ -157,7 +166,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; prazo?: string; lista?: string; token?: string; gh?: string; aba?: string; atalhos?: string; plano?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; prazo?: string; lista?: string; token?: string; gh?: string; tts?: string; aba?: string; atalhos?: string; plano?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -168,7 +177,7 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, shortcutsEnabled, planPrefs] = await Promise.all([
+  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, googleTtsKey, shortcutsEnabled, planPrefs] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
@@ -178,6 +187,7 @@ export default async function Configuracoes({
     getDefaultClickupList().catch(() => CLICKUP_LISTS[0].id),
     getUserClickupToken().catch(() => null),
     getUserGithubToken().catch(() => null),
+    getUserGoogleTtsKey().catch(() => null),
     getKeyboardShortcutsEnabled().catch(() => true),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
   ]);
@@ -185,7 +195,7 @@ export default async function Configuracoes({
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
 
   const initialTab =
-    params.aba === "clickup" || params.lista || params.token || params.gh || params.atalhos
+    params.aba === "clickup" || params.lista || params.token || params.gh || params.tts || params.atalhos
       ? "clickup"
       : params.prazo || params.regra || params.tpl
         ? "emails"
@@ -203,6 +213,7 @@ export default async function Configuracoes({
     : params.lista ? "Lista padrão do ClickUp salva."
     : params.token ? "Token do ClickUp desta conta salvo."
     : params.gh ? "Token do GitHub desta conta salvo."
+    : params.tts ? "Chave do Google Cloud TTS salva."
     : params.atalhos ? "Preferência de atalhos salva."
     : null;
 
@@ -448,6 +459,26 @@ export default async function Configuracoes({
             />
           </label>
           <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar GitHub</button>
+        </form>
+      </BentoCard>
+
+      <BentoCard as="div">
+        <form action={saveGoogleTtsKey} className="flex flex-wrap items-end gap-3">
+          <SectionHeader
+            className="w-full"
+            title="Voz neural — Google Cloud TTS (opcional)"
+            subtitle="Ativa voz neural pt-BR no Assistente e em Ouvir meu dia (1M caracteres/mês grátis). Deixe vazio para usar a voz do navegador."
+          />
+          <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-sm text-mute">
+            API Key do Google Cloud Text-to-Speech
+            <input
+              type="password"
+              name="ttsKey"
+              placeholder={googleTtsKey ? "•••••••• (chave configurada)" : "AIza..."}
+              className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink"
+            />
+          </label>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar voz</button>
         </form>
       </BentoCard>
 
