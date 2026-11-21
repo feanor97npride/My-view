@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionToast } from "@/components/ui";
+import { openInObsidian } from "@/lib/obsidian";
 import { CATEGORIES } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
 import {
@@ -899,6 +900,19 @@ export default function TriageBoard({
                       className="btn spring-btn min-h-8 px-2.5 py-1 text-xs"
                     >
                       Segunda
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openInObsidian({
+                          title: focus.subject.replace(/[\\/:*?"<>|]/g, "-").slice(0, 80),
+                          content: `# ${focus.subject}\n\n- **De:** ${focus.sender}\n- **Data:** ${focus.when}\n- **Categoria:** ${label(focus.category)}\n- **Gmail:** [Abrir conversa](${focus.url})\n\n## Resumo\n${decodeEntities(focus.snippet)}`,
+                        })
+                      }
+                      title="Salvar resumo do e-mail no Obsidian"
+                      className="btn spring-btn min-h-8 px-2.5 py-1 text-xs"
+                    >
+                      📓 Obsidian
                     </button>
                   </div>
                 </div>

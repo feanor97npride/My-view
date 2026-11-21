@@ -23,6 +23,7 @@ const SNOOZED_EMAILS = "snoozed_emails";
 const REPLY_TEMPLATES = "reply_templates";
 const ASSISTANT_MEMORY = "assistant_memory";
 const ASSISTANT_HISTORY = "assistant_history";
+const OBSIDIAN_VAULT = "obsidian_vault";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
 export type StoredChatMsg = { role: "user" | "assistant"; content: string; actions?: string[] };
@@ -274,4 +275,13 @@ export async function setAssistantHistory(messages: StoredChatMsg[]): Promise<vo
       ...(m.actions?.length ? { actions: m.actions.slice(0, 10) } : {}),
     }));
   await upsertPref(ASSISTANT_HISTORY, clean);
+}
+
+export async function getObsidianVault(): Promise<string> {
+  const map = await loadPrefsMap();
+  return typeof map[OBSIDIAN_VAULT] === "string" ? map[OBSIDIAN_VAULT] : "";
+}
+
+export async function setObsidianVault(vault: string): Promise<void> {
+  await upsertPref(OBSIDIAN_VAULT, vault.trim().slice(0, 100));
 }

@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BentoCard } from "@/components/ui";
+import { openInObsidian } from "@/lib/obsidian";
 
-export default function QuickNotes({ initialText }: { initialText: string }) {
+export default function QuickNotes({ initialText, obsidianVault }: { initialText: string; obsidianVault?: string }) {
   const router = useRouter();
   const [text, setText] = useState(initialText);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -78,15 +79,32 @@ export default function QuickNotes({ initialText }: { initialText: string }) {
                   : "Rascunho privado desta conta"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={turnIntoTask}
-          disabled={creating || !text.trim()}
-          title="Cria tarefa no ClickUp para hoje com o trecho selecionado ou a primeira linha"
-          className="btn spring-btn min-h-8 px-2.5 py-1 text-xs disabled:opacity-50"
-        >
-          {creating ? "Criando…" : "+ Virar tarefa"}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            disabled={!text.trim()}
+            onClick={() =>
+              openInObsidian({
+                title: `Notas ${new Date().toISOString().slice(0, 10)}`,
+                content: text,
+                vault: obsidianVault,
+              })
+            }
+            title="Enviar notas para o Obsidian"
+            className="btn spring-btn min-h-8 px-2.5 py-1 text-xs disabled:opacity-50"
+          >
+            📓 Obsidian
+          </button>
+          <button
+            type="button"
+            onClick={turnIntoTask}
+            disabled={creating || !text.trim()}
+            title="Cria tarefa no ClickUp para hoje com o trecho selecionado ou a primeira linha"
+            className="btn spring-btn min-h-8 px-2.5 py-1 text-xs disabled:opacity-50"
+          >
+            {creating ? "Criando…" : "+ Virar tarefa"}
+          </button>
+        </div>
       </div>
       <textarea
         ref={areaRef}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { openInObsidian } from "@/lib/obsidian";
 
 type BriefingPayload = {
   events: { time: string; title: string }[];
@@ -12,10 +13,12 @@ export default function DailyBriefing({
   account,
   todayKey,
   payload,
+  obsidianVault,
 }: {
   account: string;
   todayKey: string;
   payload: BriefingPayload;
+  obsidianVault?: string;
 }) {
   const storageKey = `myview:briefing:${account}:${todayKey}`;
   const [text, setText] = useState<string | null>(null);
@@ -73,13 +76,29 @@ export default function DailyBriefing({
           {loading ? "Gerando briefing…" : text ? "↻ Atualizar briefing IA" : "✨ Briefing IA do dia"}
         </button>
         {text && (
-          <button
-            type="button"
-            onClick={() => setCollapsed((v) => !v)}
-            className="btn spring-btn min-h-8 px-2.5 py-1 text-xs text-mute"
-          >
-            {collapsed ? "Mostrar" : "Ocultar"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                openInObsidian({
+                  title: `Briefing ${todayKey}`,
+                  content: `# Briefing ${todayKey}\n\n${text}`,
+                  vault: obsidianVault,
+                })
+              }
+              title="Salvar briefing no Obsidian"
+              className="btn spring-btn min-h-8 px-2.5 py-1 text-xs"
+            >
+              📓 Obsidian
+            </button>
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              className="btn spring-btn min-h-8 px-2.5 py-1 text-xs text-mute"
+            >
+              {collapsed ? "Mostrar" : "Ocultar"}
+            </button>
+          </>
         )}
       </div>
       {error && <p className="m-0 text-xs" style={{ color: "var(--red-fg)" }}>{error}</p>}

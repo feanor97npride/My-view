@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { openInObsidian } from "@/lib/obsidian";
 
 type Msg = { role: "user" | "assistant"; content: string; actions?: string[] };
 
@@ -265,6 +266,20 @@ export default function AssistantDrawer() {
                       </span>
                     ))}
                   </div>
+                )}
+                {m.role === "assistant" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openInObsidian({
+                        title: `Assistente ${new Date().toISOString().slice(0, 10)}`,
+                        content: m.content,
+                      })
+                    }
+                    className="cursor-pointer border-0 bg-transparent px-1 py-0.5 text-[11px] font-medium text-mute hover:text-ink"
+                  >
+                    📓 Salvar no Obsidian
+                  </button>
                 )}
               </div>
             ))
