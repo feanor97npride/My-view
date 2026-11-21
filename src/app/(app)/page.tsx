@@ -5,6 +5,7 @@ import DayPlan from "@/components/day-plan";
 import DayRing from "@/components/day-ring";
 import HomeActionEmails from "@/components/home-action-emails";
 import LiveMeeting from "@/components/live-meeting";
+import ProactivePlan from "@/components/proactive-plan";
 import QuickNotes from "@/components/quick-notes";
 import Reconnect from "@/components/reconnect";
 import RefreshButton from "@/components/refresh-button";
@@ -246,6 +247,8 @@ export default async function Home() {
 
         <DayRing done={doneEvents} total={totalGoal} />
       </section>
+
+      <ProactivePlan account={account} todayKey={todayKey} planItems={planItems} replan={replan} />
 
       {/* Bloco central de ação: Fazer agora + Plano do dia */}
       <div className="spring-card spring-d2 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
