@@ -15,6 +15,13 @@ export type GithubRepoView = {
   stars: number;
   openIssues: number;
   pushedAt: string;
+  deployUrl: string | null;
+  openPrs: {
+    number: number;
+    title: string;
+    url: string;
+    draft: boolean;
+  }[];
   lastCommit: {
     sha: string;
     message: string;
@@ -37,6 +44,7 @@ type RawRepo = {
   private: boolean;
   description: string | null;
   html_url: string;
+  homepage: string | null;
   language: string | null;
   default_branch: string;
   stargazers_count: number;
@@ -70,8 +78,11 @@ const cachedRepos = unstable_cache(
       raw.map(async (r, idx) => {
         let lastCommit: GithubRepoView["lastCommit"] = null;
         let lastRun: GithubRepoView["lastRun"] = null;
+        let openPrs: GithubRepoView["openPrs"] = [];
+        let deployUrl: string | null = r.homepage && /^https?:\/\//i.test(r.homepage.trim()) ? r.homepage.trim() : null;
+
         if (idx < 12) {
-          const [commits, runs] = await Promise.all([
+          const [commits, runs, pulls, deps] = await Promise.all([
             ghGet<{ sha: string; html_url: string; commit: { message: string; author?: { name?: string; date?: string } } }[]>(
               `/repos/${r.full_name}/commits?per_page=1`,
               token,
@@ -80,6 +91,11 @@ const cachedRepos = unstable_cache(
               `/repos/${r.full_name}/actions/runs?per_page=1`,
               token,
             ).catch(() => ({ workflow_runs: [] })),
+            ghGet<{ number: number; title: string; html_url: string; draft?: boolean }[]>(
+              `/repos/${r.full_name}/pulls?state=open&per_page=3`,
+              token,
+            ).catch(() => []),
+            ghGet<{ id: number }[]>(`/repos/${r.full_name}/deployments?per_page=1`, token).catch(() => []),
           ]);
           const c = commits[0];
           if (c) {
@@ -100,6 +116,22 @@ const cachedRepos = unstable_cache(
               url: run.html_url ?? `${r.html_url}/actions`,
             };
           }
+          openPrs = pulls.map((p) => ({
+            number: p.number,
+            title: p.title,
+            url: p.html_url,
+            draft: !!p.draft,
+          }));
+          if (deps[0]?.id) {
+            const statuses = await ghGet<{ environment_url?: string; state?: string }[]>(
+              `/repos/${r.full_name}/deployments/${deps[0].id}/statuses?per_page=1`,
+              token,
+            ).catch(() => []);
+            const envUrl = statuses[0]?.environment_url;
+            if (envUrl && /^https?:\/\//i.test(envUrl)) {
+              deployUrl = envUrl;
+            }
+          }
         }
         return {
           id: r.id,
@@ -113,6 +145,8 @@ const cachedRepos = unstable_cache(
           stars: r.stargazers_count,
           openIssues: r.open_issues_count,
           pushedAt: r.pushed_at,
+          deployUrl,
+          openPrs,
           lastCommit,
           lastRun,
         };

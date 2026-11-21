@@ -106,7 +106,7 @@ export default function GithubLiveBoard({
 
   const runningCount = repos.filter((r) => r.lastRun && (r.lastRun.status === "in_progress" || r.lastRun.status === "queued")).length;
   const failedCount = repos.filter((r) => r.lastRun?.conclusion === "failure").length;
-  const issuesCount = repos.reduce((s, r) => s + r.openIssues, 0);
+  const prsCount = repos.reduce((s, r) => s + (r.openPrs?.length ?? 0), 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -130,8 +130,8 @@ export default function GithubLiveBoard({
             </div>
           </div>
           <div className="rounded-xl border border-line bg-bg px-3.5 py-2">
-            <div className="text-[11px] text-mute">Issues / PRs abertos</div>
-            <div className="font-display text-xl font-bold tabular-nums">{issuesCount}</div>
+            <div className="text-[11px] text-mute">PRs abertos</div>
+            <div className="font-display text-xl font-bold tabular-nums text-primary">{prsCount}</div>
           </div>
         </div>
 
@@ -232,6 +232,26 @@ export default function GithubLiveBoard({
                       <div className="mt-0.5 truncate font-medium">{r.lastCommit.message}</div>
                     </a>
                   )}
+
+                  {r.openPrs && r.openPrs.length > 0 && (
+                    <div className="flex flex-col gap-1 pt-0.5">
+                      {r.openPrs.map((pr) => (
+                        <a
+                          key={pr.number}
+                          href={pr.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-lg bg-primary-soft/60 px-2.5 py-1.5 text-xs text-ink no-underline hover:bg-primary-soft"
+                        >
+                          <span className="chip chip-primary shrink-0 px-1.5 py-0 text-[10px]">
+                            PR #{pr.number}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-medium">{pr.title}</span>
+                          {pr.draft && <span className="text-[10px] text-mute">Draft</span>}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2.5 text-[11px] text-mute">
@@ -240,7 +260,12 @@ export default function GithubLiveBoard({
                     <span>⎇ {r.defaultBranch}</span>
                     {r.openIssues > 0 && <span>• {r.openIssues} abertos</span>}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
+                    {r.deployUrl && (
+                      <a href={r.deployUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary hover:underline">
+                        🚀 Deploy ↗
+                      </a>
+                    )}
                     {r.lastRun && (
                       <a href={r.lastRun.url} target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline">
                         Actions ↗
