@@ -11,6 +11,7 @@ import MeetingBanner from "@/components/meeting-banner";
 import NavLinks from "@/components/nav-links";
 import SidebarShell, { type SidebarMeeting } from "@/components/sidebar-shell";
 import ThemeToggle from "@/components/theme-toggle";
+import VoiceAssistantMode, { VoiceModeTrigger } from "@/components/voice-assistant-mode";
 
 function Brand() {
   return (
@@ -129,6 +130,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-line bg-card/90 px-3 pt-[max(0.625rem,env(safe-area-inset-top))] pb-2.5 backdrop-blur-md md:hidden">
         <Brand />
         <div className="flex items-center gap-1.5">
+          <VoiceModeTrigger compact />
           <AssistantTrigger compact />
           <CommandTrigger compact />
           <ThemeToggle />
@@ -153,6 +155,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </Suspense>
       <CommandPalette />
       <AssistantDrawer />
+      <VoiceAssistantMode />
     </div>
   );
 }

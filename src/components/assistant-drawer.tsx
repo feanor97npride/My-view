@@ -221,6 +221,17 @@ export default function AssistantDrawer() {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                window.dispatchEvent(new CustomEvent("myview:open-voice-mode"));
+              }}
+              title="Abrir Modo Conversa por Voz (⌘⇧J)"
+              className="btn spring-btn min-h-8 px-2 py-1 text-xs"
+            >
+              🎙️
+            </button>
             {canSpeak() && (
               <button
                 type="button"

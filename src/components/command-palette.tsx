@@ -76,6 +76,16 @@ export default function CommandPalette() {
         },
       },
       {
+        id: "voice-mode",
+        label: "🎙️ Modo Conversa por Voz (Hands-free)",
+        group: "Produtividade",
+        keywords: "voz audio jarvis falar microfone handsfree",
+        run: () => {
+          setOpen(false);
+          window.dispatchEvent(new CustomEvent("myview:open-voice-mode"));
+        },
+      },
+      {
         id: "new-task",
         label: "+ Nova tarefa rápida (ClickUp)",
         group: "Produtividade",
