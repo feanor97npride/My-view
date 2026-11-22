@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import VoiceInputButton from "@/components/voice-input-button";
 import { openInObsidian } from "@/lib/obsidian";
 import { canSpeak, speakPtBr, stopSpeaking } from "@/lib/voice";
 
@@ -13,17 +14,6 @@ const SUGGESTIONS = [
   "Cria uma tarefa para amanhã: revisar pendências",
   "Lembre que prefiro foco de manhã sem reuniões",
 ];
-
-type SpeechRecLike = {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
 
 export function AssistantTrigger({ compact = false }: { compact?: boolean }) {
   const openDrawer = () => window.dispatchEvent(new CustomEvent("myview:open-assistant"));
@@ -68,11 +58,8 @@ export default function AssistantDrawer() {
   const [showMem, setShowMem] = useState(false);
   const [voiceAuto, setVoiceAuto] = useState(true);
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
-  const [listening, setListening] = useState(false);
-  const [hasMic, setHasMic] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const recRef = useRef<SpeechRecLike | null>(null);
 
   useEffect(() => {
     try {
@@ -80,8 +67,6 @@ export default function AssistantDrawer() {
     } catch {
       // ignore
     }
-    const w = window as unknown as { SpeechRecognition?: new () => SpeechRecLike; webkitSpeechRecognition?: new () => SpeechRecLike };
-    setHasMic(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
@@ -205,33 +190,6 @@ export default function AssistantDrawer() {
     } finally {
       setSending(false);
     }
-  };
-
-  const toggleMic = () => {
-    if (listening && recRef.current) {
-      recRef.current.stop();
-      setListening(false);
-      return;
-    }
-    const w = window as unknown as { SpeechRecognition?: new () => SpeechRecLike; webkitSpeechRecognition?: new () => SpeechRecLike };
-    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!Ctor) return;
-    stopSpeaking();
-    const rec = new Ctor();
-    rec.lang = "pt-BR";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.onresult = (ev) => {
-      const transcript = ev.results[0]?.[0]?.transcript?.trim();
-      if (transcript) {
-        void send(transcript);
-      }
-    };
-    rec.onerror = () => setListening(false);
-    rec.onend = () => setListening(false);
-    recRef.current = rec;
-    setListening(true);
-    rec.start();
   };
 
   const removeMemory = async (index: number) => {
@@ -419,26 +377,24 @@ export default function AssistantDrawer() {
           }}
           className="flex items-center gap-2 border-t border-line px-3.5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
         >
-          {hasMic && (
-            <button
-              type="button"
-              onClick={toggleMic}
-              disabled={sending}
-              title={listening ? "Parar gravação" : "Falar com o assistente"}
-              aria-label={listening ? "Parar gravação" : "Falar com o assistente"}
-              className={`btn spring-btn min-h-11 shrink-0 px-3 text-sm ${
-                listening ? "animate-pulse border-red-500 bg-red-500/10 text-red-600" : ""
-              }`}
-            >
-              🎤
-            </button>
-          )}
+          <VoiceInputButton
+            title="Falar com o assistente"
+            disabled={sending}
+            onInterim={(interim) => setInput(interim)}
+            onTranscript={(spoken) => {
+              setError(null);
+              setInput("");
+              void send(spoken);
+            }}
+            onError={(msg) => setError(msg)}
+            className="min-h-11 shrink-0 px-3 text-sm"
+          />
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={listening ? "Ouvindo você…" : "Peça algo ao seu assistente…"}
+            placeholder="Peça algo ao seu assistente…"
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary"
           />
           <button

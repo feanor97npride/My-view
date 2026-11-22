@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BentoCard } from "@/components/ui";
+import VoiceInputButton from "@/components/voice-input-button";
 import { openInObsidian } from "@/lib/obsidian";
 
 export default function QuickNotes({ initialText, obsidianVault }: { initialText: string; obsidianVault?: string }) {
@@ -79,7 +80,18 @@ export default function QuickNotes({ initialText, obsidianVault }: { initialText
                   : "Rascunho privado desta conta"}
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <VoiceInputButton
+            label="Ditar"
+            title="Ditar nota por voz"
+            onTranscript={(spoken) => {
+              setTaskMsg(null);
+              const next = text.trim() ? `${text.trimEnd()}\n${spoken}` : spoken;
+              onChange(next);
+            }}
+            onError={(msg) => setTaskMsg(msg)}
+            className="min-h-8 px-2.5 py-1 text-xs"
+          />
           <button
             type="button"
             disabled={!text.trim()}

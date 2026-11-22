@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionToast, BentoCard, type ToastAction } from "@/components/ui";
+import VoiceInputButton from "@/components/voice-input-button";
 import { startFocusTimer } from "@/lib/focus-timer";
 
 export type ClickupBoardTask = {
@@ -320,14 +321,23 @@ export default function ClickupBoard({
       {/* Criação rápida + Filtros */}
       <BentoCard className="flex flex-col gap-3 !py-4">
         <form onSubmit={createTask} className="flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="+ Nova tarefa no ClickUp…"
-            required
-            className="min-h-10 w-full rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary sm:w-auto sm:min-w-[220px] sm:flex-1"
-          />
+          <div className="flex w-full items-center gap-1.5 sm:w-auto sm:min-w-[220px] sm:flex-1">
+            <input
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="+ Nova tarefa no ClickUp…"
+              required
+              className="min-h-10 min-w-0 flex-1 rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary"
+            />
+            <VoiceInputButton
+              title="Ditar nova tarefa por voz"
+              disabled={creating}
+              onTranscript={(spoken) => setNewTitle((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken))}
+              onError={(msg) => setError(msg)}
+              className="min-h-10 shrink-0 px-3 text-sm"
+            />
+          </div>
           <select
             aria-label="Lista da nova tarefa"
             value={newListId}
