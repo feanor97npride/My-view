@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import DailyAutomations from "@/components/daily-automations";
 import DailyBriefing from "@/components/daily-briefing";
 import DayPlan from "@/components/day-plan";
 import DayRing from "@/components/day-ring";
@@ -18,7 +19,18 @@ import { staticAlerts, summarize } from "@/lib/day-summary";
 import { gmailThreadUrl } from "@/lib/email-view";
 import { originsByTask } from "@/lib/links";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
-import { getAwaitingDays, getMeetingWindow, getPlanPrefs, getQuickNotes, getSelectedCalendars } from "@/lib/prefs";
+import {
+  type AutomationState,
+  DEFAULT_AUTOMATIONS,
+  getAutomationPrefs,
+  getAutomationState,
+  getAwaitingDays,
+  getCachedDailyBriefing,
+  getMeetingWindow,
+  getPlanPrefs,
+  getQuickNotes,
+  getSelectedCalendars,
+} from "@/lib/prefs";
 import { DEFAULT_PLAN, dayKey, freeBlocks, planOverdue, scoreTask, suggestPlan, zonedMs, type Candidate } from "@/lib/task-dates";
 import { extractFinance, filaOf, financeDueDays } from "@/lib/triage";
 
@@ -30,12 +42,14 @@ export default async function Home() {
   const email = session?.user?.email;
 
   // Rodada 1: preferências, tarefas e e-mails em paralelo (sem waterfall sequencial)
-  const [selected, windowMin, planPrefs, awaitingDays, quickNotes, tasks, mail] = await Promise.all([
+  const [selected, windowMin, planPrefs, awaitingDays, quickNotes, automationPrefs, automationState, tasks, mail] = await Promise.all([
     getSelectedCalendars().catch(() => null),
     getMeetingWindow().catch(() => 30),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
     getAwaitingDays().catch(() => 2),
     getQuickNotes().catch(() => ""),
+    getAutomationPrefs().catch(() => DEFAULT_AUTOMATIONS),
+    getAutomationState().catch((): AutomationState => ({})),
     openTasks().catch((e: Error) => e),
     token ? syncEmails(token).catch((e: Error) => e) : Promise.resolve(null),
   ]);
@@ -96,6 +110,7 @@ export default async function Home() {
 
   // Replan proposal and day plan. Both only use what is already loaded above.
   const todayKey = dayKey(now, tz);
+  const cachedBriefing = await getCachedDailyBriefing(todayKey).catch(() => null);
   const loadByDay: Record<string, number> = {};
   const overdueTasks = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "overdue") : [];
   if (Array.isArray(tasks)) {
@@ -229,6 +244,8 @@ export default async function Home() {
             <DailyBriefing
               account={account}
               todayKey={todayKey}
+              initialText={cachedBriefing}
+              autoGenerate={automationPrefs.autoBriefing}
               payload={{
                 events: (today?.events ?? []).filter((e) => !e.allDay && e.end > now).map((e) => ({ time: fmt(e.start), title: e.title })),
                 tasks: urgent.map((t) => ({ bucket: t.bucket === "overdue" ? "Atrasada" : "Hoje", title: t.title })),
@@ -268,6 +285,19 @@ export default async function Home() {
 
         <DayRing done={doneEvents} total={totalGoal} />
       </section>
+
+      <DailyAutomations
+        account={account}
+        todayKey={todayKey}
+        shouldRunReplan={automationPrefs.autoReplan && replan.length > 0 && automationState.lastReplanDate !== todayKey}
+        shouldRunFollowup={
+          automationPrefs.autoFollowupTask &&
+          Array.isArray(waiting) &&
+          waiting.some((w) => !automationState.followupThreads?.[w.threadId])
+        }
+        replan={replan}
+        waiting={(waiting ?? []).map((w) => ({ threadId: w.threadId, to: w.to || w.toAddress, subject: w.subject, dias: w.dias }))}
+      />
 
       <ProactivePlan account={account} todayKey={todayKey} planItems={planItems} replan={replan} />
 

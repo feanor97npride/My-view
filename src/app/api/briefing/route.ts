@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { generateDailyBriefingWithAI } from "@/lib/gmail";
+import { setCachedDailyBriefing } from "@/lib/prefs";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -8,6 +9,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
   }
   let body: {
+    dateKey?: string;
     events?: { time: string; title: string }[];
     tasks?: { bucket: string; title: string }[];
     emails?: { sender: string; subject: string }[];
@@ -23,6 +25,9 @@ export async function POST(req: Request) {
       tasks: Array.isArray(body.tasks) ? body.tasks : [],
       emails: Array.isArray(body.emails) ? body.emails : [],
     });
+    if (typeof body.dateKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.dateKey)) {
+      await setCachedDailyBriefing(body.dateKey, text).catch(() => {});
+    }
     return NextResponse.json({ ok: true, text });
   } catch (err) {
     return NextResponse.json(

@@ -15,28 +15,22 @@ export default function DailyBriefing({
   todayKey,
   payload,
   obsidianVault,
+  initialText = null,
+  autoGenerate = false,
 }: {
   account: string;
   todayKey: string;
   payload: BriefingPayload;
   obsidianVault?: string;
+  initialText?: string | null;
+  autoGenerate?: boolean;
 }) {
   const storageKey = `myview:briefing:${account}:${todayKey}`;
-  const [text, setText] = useState<string | null>(null);
+  const [text, setText] = useState<string | null>(initialText);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-
-  useEffect(() => {
-    try {
-      const cached = sessionStorage.getItem(storageKey);
-      if (cached) setText(cached);
-    } catch {
-      // ignore storage errors
-    }
-    return () => stopSpeaking();
-  }, [storageKey]);
 
   const generate = async () => {
     if (loading) return;
@@ -47,7 +41,7 @@ export default function DailyBriefing({
       const res = await fetch("/api/briefing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, dateKey: todayKey }),
       });
       const j = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
       if (!res.ok || !j.text) {
@@ -66,6 +60,41 @@ export default function DailyBriefing({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (initialText) {
+      setText(initialText);
+      try {
+        sessionStorage.setItem(storageKey, initialText);
+      } catch {
+        // ignore
+      }
+      return () => stopSpeaking();
+    }
+    let cached: string | null = null;
+    try {
+      cached = sessionStorage.getItem(storageKey);
+      if (cached) setText(cached);
+    } catch {
+      // ignore storage errors
+    }
+    const autoFlagKey = `${storageKey}:auto`;
+    const hasContent = payload.events.length + payload.tasks.length + payload.emails.length > 0;
+    if (!cached && autoGenerate && hasContent) {
+      let alreadyTried = false;
+      try {
+        alreadyTried = sessionStorage.getItem(autoFlagKey) === "1";
+        if (!alreadyTried) sessionStorage.setItem(autoFlagKey, "1");
+      } catch {
+        // ignore
+      }
+      if (!alreadyTried) {
+        void generate();
+      }
+    }
+    return () => stopSpeaking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, initialText, autoGenerate]);
 
   return (
     <div className="flex flex-col gap-2">

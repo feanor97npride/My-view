@@ -8,7 +8,33 @@ import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs } from "@/lib/task-dates";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
-import { getAwaitingDays, getDefaultClickupList, getEmailRules, getKeyboardShortcutsEnabled, getMeetingWindow, getPlanPrefs, getReplyTemplates, getSelectedCalendars, getUserClickupToken, getUserGithubToken, getUserGoogleTtsKey, setAwaitingDays, setDefaultClickupList, setEmailRules, setKeyboardShortcutsEnabled, setMeetingWindow, setPlanPrefs, setReplyTemplates, setSelectedCalendars, setUserClickupToken, setUserGithubToken, setUserGoogleTtsKey } from "@/lib/prefs";
+import {
+  DEFAULT_AUTOMATIONS,
+  getAutomationPrefs,
+  getAwaitingDays,
+  getDefaultClickupList,
+  getEmailRules,
+  getKeyboardShortcutsEnabled,
+  getMeetingWindow,
+  getPlanPrefs,
+  getReplyTemplates,
+  getSelectedCalendars,
+  getUserClickupToken,
+  getUserGithubToken,
+  getUserGoogleTtsKey,
+  setAutomationPrefs,
+  setAwaitingDays,
+  setDefaultClickupList,
+  setEmailRules,
+  setKeyboardShortcutsEnabled,
+  setMeetingWindow,
+  setPlanPrefs,
+  setReplyTemplates,
+  setSelectedCalendars,
+  setUserClickupToken,
+  setUserGithubToken,
+  setUserGoogleTtsKey,
+} from "@/lib/prefs";
 
 async function save(formData: FormData) {
   "use server";
@@ -30,6 +56,19 @@ async function saveWindow(formData: FormData) {
   await setMeetingWindow(normalizeWindow(formData.get("janela")));
   revalidatePath("/", "layout");
   redirect("/configuracoes?aviso=ok");
+}
+
+async function saveAutomations(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  await setAutomationPrefs({
+    autoBriefing: formData.get("autoBriefing") === "1",
+    autoReplan: formData.get("autoReplan") === "1",
+    autoFollowupTask: formData.get("autoFollowupTask") === "1",
+  });
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?auto=ok");
 }
 
 async function saveAwaitingDays(formData: FormData) {
@@ -166,7 +205,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; prazo?: string; lista?: string; token?: string; gh?: string; tts?: string; aba?: string; atalhos?: string; plano?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; auto?: string; prazo?: string; lista?: string; token?: string; gh?: string; tts?: string; aba?: string; atalhos?: string; plano?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -177,7 +216,7 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, googleTtsKey, shortcutsEnabled, planPrefs] = await Promise.all([
+  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, googleTtsKey, shortcutsEnabled, planPrefs, automationPrefs] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
@@ -190,6 +229,7 @@ export default async function Configuracoes({
     getUserGoogleTtsKey().catch(() => null),
     getKeyboardShortcutsEnabled().catch(() => true),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
+    getAutomationPrefs().catch(() => DEFAULT_AUTOMATIONS),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
@@ -204,6 +244,7 @@ export default async function Configuracoes({
   const toastMessage =
     params.salvo ? "Calendários salvos."
     : params.aviso ? "Aviso de reunião salvo."
+    : params.auto ? "Automações do dia salvas."
     : params.plano === "ok" ? "Plano do dia salvo."
     : params.prazo ? "Prazo de aguardando resposta salvo."
     : params.regra === "ok" ? "Regra de e-mail salva."
@@ -261,6 +302,39 @@ export default async function Configuracoes({
             </select>
           </label>
           <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar aviso</button>
+        </form>
+      </BentoCard>
+
+      <BentoCard as="div">
+        <form action={saveAutomations} className="flex flex-col gap-3">
+          <SectionHeader
+            title="Automações do dia"
+            subtitle="Rotinas executadas automaticamente na primeira abertura do dia (em Hoje)."
+          />
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl px-2 py-1.5 hover:bg-primary-soft">
+            <input type="checkbox" name="autoBriefing" value="1" defaultChecked={automationPrefs.autoBriefing} className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--primary)]" />
+            <span className="text-sm">
+              <span className="block font-medium text-ink">Gerar Briefing IA automaticamente</span>
+              <span className="block text-xs text-mute">Salva o briefing do dia na nuvem para abrir instantaneamente no PC e no celular.</span>
+            </span>
+          </label>
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl px-2 py-1.5 hover:bg-primary-soft">
+            <input type="checkbox" name="autoReplan" value="1" defaultChecked={automationPrefs.autoReplan} className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--primary)]" />
+            <span className="text-sm">
+              <span className="block font-medium text-ink">Replanejar tarefas atrasadas automaticamente</span>
+              <span className="block text-xs text-mute">Move tarefas vencidas para os próximos dias úteis livres (1x por dia).</span>
+            </span>
+          </label>
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl px-2 py-1.5 hover:bg-primary-soft">
+            <input type="checkbox" name="autoFollowupTask" value="1" defaultChecked={automationPrefs.autoFollowupTask} className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--primary)]" />
+            <span className="text-sm">
+              <span className="block font-medium text-ink">Criar tarefa de follow-up para e-mails &ldquo;Aguardando&rdquo;</span>
+              <span className="block text-xs text-mute">Quando uma conversa passar do prazo sem resposta, cria tarefa no ClickUp (sem duplicar).</span>
+            </span>
+          </label>
+          <div>
+            <button type="submit" className="btn btn-primary spring-btn">Salvar automações</button>
+          </div>
         </form>
       </BentoCard>
 

@@ -26,9 +26,28 @@ const ASSISTANT_HISTORY = "assistant_history";
 const OBSIDIAN_VAULT = "obsidian_vault";
 const GITHUB_TOKEN = "github_token";
 const GOOGLE_TTS_KEY = "google_tts_key";
+const AUTOMATION_PREFS = "automation_prefs";
+const DAILY_BRIEFING_CACHE = "daily_briefing_cache";
+const AUTOMATION_STATE = "automation_state";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
 export type StoredChatMsg = { role: "user" | "assistant"; content: string; actions?: string[] };
+export type AutomationPrefs = {
+  autoBriefing: boolean;
+  autoReplan: boolean;
+  autoFollowupTask: boolean;
+};
+export type CachedDailyBriefing = { dateKey: string; text: string; updatedAt: string };
+export type AutomationState = {
+  lastReplanDate?: string;
+  followupThreads?: Record<string, string>;
+};
+
+export const DEFAULT_AUTOMATIONS: AutomationPrefs = {
+  autoBriefing: true,
+  autoReplan: false,
+  autoFollowupTask: false,
+};
 
 export const DEFAULT_REPLY_TEMPLATES: ReplyTemplate[] = [
   {
@@ -323,4 +342,66 @@ export async function getUserGoogleTtsKey(): Promise<string | null> {
 
 export async function setUserGoogleTtsKey(key: string): Promise<void> {
   await upsertPref(GOOGLE_TTS_KEY, key.trim());
+}
+
+export async function getAutomationPrefs(): Promise<AutomationPrefs> {
+  const map = await loadPrefsMap();
+  const raw = map[AUTOMATION_PREFS];
+  if (!raw || typeof raw !== "object") return DEFAULT_AUTOMATIONS;
+  const o = raw as Record<string, unknown>;
+  return {
+    autoBriefing: typeof o.autoBriefing === "boolean" ? o.autoBriefing : DEFAULT_AUTOMATIONS.autoBriefing,
+    autoReplan: typeof o.autoReplan === "boolean" ? o.autoReplan : DEFAULT_AUTOMATIONS.autoReplan,
+    autoFollowupTask: typeof o.autoFollowupTask === "boolean" ? o.autoFollowupTask : DEFAULT_AUTOMATIONS.autoFollowupTask,
+  };
+}
+
+export async function setAutomationPrefs(prefs: AutomationPrefs): Promise<void> {
+  await upsertPref(AUTOMATION_PREFS, {
+    autoBriefing: Boolean(prefs.autoBriefing),
+    autoReplan: Boolean(prefs.autoReplan),
+    autoFollowupTask: Boolean(prefs.autoFollowupTask),
+  });
+}
+
+export async function getCachedDailyBriefing(dateKey: string): Promise<string | null> {
+  const map = await loadPrefsMap();
+  const raw = map[DAILY_BRIEFING_CACHE];
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Partial<CachedDailyBriefing>;
+  if (o.dateKey === dateKey && typeof o.text === "string" && o.text.trim()) {
+    return o.text;
+  }
+  return null;
+}
+
+export async function setCachedDailyBriefing(dateKey: string, text: string): Promise<void> {
+  const payload: CachedDailyBriefing = {
+    dateKey,
+    text: text.slice(0, 6000),
+    updatedAt: new Date().toISOString(),
+  };
+  await upsertPref(DAILY_BRIEFING_CACHE, payload);
+}
+
+export async function getAutomationState(): Promise<AutomationState> {
+  const map = await loadPrefsMap();
+  const raw = map[AUTOMATION_STATE];
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Partial<AutomationState>;
+  return {
+    lastReplanDate: typeof o.lastReplanDate === "string" ? o.lastReplanDate : undefined,
+    followupThreads:
+      o.followupThreads && typeof o.followupThreads === "object"
+        ? (o.followupThreads as Record<string, string>)
+        : undefined,
+  };
+}
+
+export async function setAutomationState(state: AutomationState): Promise<void> {
+  const entries = Object.entries(state.followupThreads ?? {}).slice(-100);
+  await upsertPref(AUTOMATION_STATE, {
+    ...(state.lastReplanDate ? { lastReplanDate: state.lastReplanDate } : {}),
+    followupThreads: Object.fromEntries(entries),
+  });
 }
