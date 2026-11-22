@@ -194,7 +194,7 @@ export default async function Home() {
   const voiceScript = voiceParts.filter(Boolean).join(" ");
 
   return (
-    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 p-4 md:px-8 md:py-8 xl:px-10">
+    <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-3 py-4 sm:gap-5 sm:p-4 md:px-8 md:py-8 xl:px-10">
       {/* Hero Bento: Saudação + Resumo/Alertas + 4 KPIs integrados + Anel do dia */}
       <section aria-label="Visão geral de hoje" className="spring-card spring-d1 grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="card bento-card flex flex-col justify-between gap-4 lg:col-span-8">
@@ -206,8 +206,8 @@ export default async function Home() {
           </div>
 
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+            <div className="min-w-0">
+              <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
                 {greeting}{first && `, ${first}`}
               </h1>
               {summary && <p className="mt-1 mb-0 text-sm text-mute">{summary}</p>}
@@ -220,7 +220,7 @@ export default async function Home() {
             {alerts.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {alerts.map((a) => (
-                  <Link key={a.id} href={a.href} className={`chip chip-${a.tone} no-underline hover:brightness-95`}>
+                  <Link key={a.id} href={a.href} className={`chip chip-${a.tone} max-w-full whitespace-normal text-left leading-snug no-underline hover:brightness-95`}>
                     {a.label}: {a.text}
                   </Link>
                 ))}
@@ -295,7 +295,7 @@ export default async function Home() {
       {/* Base: Linha do tempo + E-mails que pedem ação */}
       <div className="spring-card spring-d3 grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
         <section className="card bento-card min-w-0 lg:col-span-6">
-          <div className="mb-4 flex items-baseline justify-between">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-display text-xl font-semibold">Linha do tempo de hoje</h2>
             <Link href="/semana" className="text-sm font-semibold">Ver semana</Link>
           </div>
@@ -305,8 +305,8 @@ export default async function Home() {
             {today?.events.map((e) => {
               const s = state(e);
               return (
-                <li key={e.id} className="flex items-stretch gap-4">
-                  <div className="w-[52px] shrink-0 pt-3 text-right text-[13px] tabular-nums text-mute">
+                <li key={e.id} className="flex items-stretch gap-2.5 sm:gap-4">
+                  <div className="w-[46px] shrink-0 pt-3 text-right text-xs tabular-nums text-mute sm:w-[52px] sm:text-[13px]">
                     {e.allDay ? (
                       <div className="font-semibold text-ink">Dia</div>
                     ) : (
@@ -320,13 +320,13 @@ export default async function Home() {
                     href={e.link ?? undefined}
                     target={e.link ? "_blank" : undefined}
                     rel={e.link ? "noopener noreferrer" : undefined}
-                    className={`block min-w-0 flex-1 rounded-2xl border px-3.5 py-3 no-underline transition-colors ${e.link ? "hover:border-primary" : ""} ${cardClass[s]}`}
+                    className={`block min-w-0 flex-1 rounded-2xl border px-3 py-2.5 no-underline transition-colors sm:px-3.5 sm:py-3 ${e.link ? "hover:border-primary" : ""} ${cardClass[s]}`}
                   >
-                    <span className="flex items-start justify-between gap-2">
-                      <span className="font-semibold">{e.title}</span>
-                      <span className={`chip ${tag[s][1]}`}>{tag[s][0]}</span>
+                    <span className="flex flex-wrap items-start justify-between gap-1.5 sm:flex-nowrap sm:gap-2">
+                      <span className="min-w-0 break-words font-semibold">{e.title}</span>
+                      <span className={`chip shrink-0 ${tag[s][1]}`}>{tag[s][0]}</span>
                     </span>
-                    <span className="mt-0.5 block text-[13px] text-mute">{e.calendar}</span>
+                    <span className="mt-0.5 block truncate text-[13px] text-mute">{e.calendar}</span>
                     {e.link && <span className="sr-only">Abre no Google Agenda, em nova aba</span>}
                   </a>
                 </li>
@@ -336,7 +336,7 @@ export default async function Home() {
         </section>
 
         <section className="card bento-card min-w-0 lg:col-span-6">
-          <div className="mb-3 flex items-baseline justify-between">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-display text-xl font-semibold">E-mails que pedem ação</h2>
             {mail && !(mail instanceof Error) && <span className="text-[13px] text-mute">{actions.length} não lidos</span>}
           </div>

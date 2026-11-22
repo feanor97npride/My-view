@@ -48,7 +48,7 @@ export default function ConfigTabs({
       <div
         role="tablist"
         aria-label="Seções de configurações"
-        className="inline-flex w-fit flex-wrap rounded-2xl border border-line bg-card p-1 text-xs font-medium"
+        className="flex w-full flex-wrap rounded-2xl border border-line bg-card p-1 text-xs font-medium sm:inline-flex sm:w-fit"
       >
         {TABS.map((t) => {
           const active = tab === t.id;
@@ -59,7 +59,7 @@ export default function ConfigTabs({
               role="tab"
               aria-selected={active}
               onClick={() => setTab(t.id)}
-              className={`spring-btn cursor-pointer rounded-xl px-3.5 py-2 transition-colors ${
+              className={`spring-btn flex-1 cursor-pointer rounded-xl px-3 py-2 text-center transition-colors sm:flex-none sm:px-3.5 ${
                 active ? "bg-primary font-semibold text-[var(--on-primary)]" : "text-mute hover:text-ink"
               }`}
             >

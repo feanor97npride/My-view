@@ -140,7 +140,7 @@ export default function HomeActionEmails({
                   className="flex flex-col gap-1 text-ink no-underline"
                 >
                   <span className="truncate text-[13px] text-mute">{m.sender}</span>
-                  <span className="font-semibold hover:underline">{m.subject}</span>
+                  <span className="break-words font-semibold hover:underline">{m.subject}</span>
                 </a>
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
                   <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
@@ -149,7 +149,7 @@ export default function HomeActionEmails({
                       type="button"
                       disabled={isBusy}
                       onClick={() => markRead(m)}
-                      className="btn spring-btn min-h-7 bg-card px-2.5 py-0.5 text-[11px] disabled:opacity-50"
+                      className="btn spring-btn min-h-8 bg-card px-2.5 py-1 text-[11px] disabled:opacity-50"
                     >
                       ✓ Lido
                     </button>
@@ -157,7 +157,7 @@ export default function HomeActionEmails({
                       type="button"
                       disabled={isBusy || hasTask}
                       onClick={() => createTask(m)}
-                      className="btn spring-btn min-h-7 bg-card px-2.5 py-0.5 text-[11px] disabled:opacity-60"
+                      className="btn spring-btn min-h-8 bg-card px-2.5 py-1 text-[11px] disabled:opacity-60"
                     >
                       {hasTask ? "Tarefa ✓" : "+ Tarefa"}
                     </button>

@@ -159,8 +159,8 @@ export default function TodayTasks({
     const options = statuses[t.listId] ?? [];
     const disabled = busy.has(t.id);
     return (
-      <li key={t.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-bg p-4 transition-colors hover:border-line-strong">
-        <a href={t.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink no-underline hover:underline">
+      <li key={t.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-bg p-3.5 transition-colors hover:border-line-strong sm:p-4">
+        <a href={t.url} target="_blank" rel="noopener noreferrer" className="break-words font-semibold text-ink no-underline hover:underline">
           {t.title}
           <span className="sr-only"> (abre no ClickUp, em nova aba)</span>
         </a>

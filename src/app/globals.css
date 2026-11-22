@@ -129,6 +129,7 @@ body {
 
   .chip {
     display: inline-block;
+    max-width: 100%;
     padding: 2px 10px;
     border-radius: 999px;
     font-size: 12px;
