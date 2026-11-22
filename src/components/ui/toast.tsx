@@ -23,10 +23,10 @@ export function ActionToast({
     <div
       role="status"
       aria-live="polite"
-      className="toast-enter fixed bottom-24 right-4 z-30 overflow-hidden rounded-2xl border border-line-strong bg-card text-sm font-medium shadow-xl md:bottom-6 md:right-6"
+      className="toast-enter fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 overflow-hidden rounded-2xl border border-line-strong bg-card text-sm font-medium shadow-xl md:inset-x-auto md:bottom-6 md:right-6"
     >
-      <div className="flex items-center gap-3 px-4 py-3">
-        <span>{toast.label}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-3">
+        <span className="min-w-0 flex-1">{toast.label}</span>
         {toast.extra && (
           <button
             type="button"

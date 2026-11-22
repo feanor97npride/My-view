@@ -193,7 +193,7 @@ export default function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[14vh] backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-[max(1.5rem,6vh)] backdrop-blur-[2px] md:px-4 md:pt-[14vh]"
       onClick={() => setOpen(false)}
       role="dialog"
       aria-modal="true"

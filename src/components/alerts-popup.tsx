@@ -219,7 +219,7 @@ export default function AlertsPopup({
         type="button"
         onClick={expand}
         aria-label={focus ? `Foco em andamento: ${formatMmSs(secLeft)}` : `Abrir ${items.length} alertas e lembretes`}
-        className="toast-enter spring-btn fixed bottom-24 right-4 z-20 flex cursor-pointer items-center gap-2 rounded-full border border-line-strong bg-card px-3.5 py-2 text-xs font-semibold text-ink shadow-xl hover:border-primary md:bottom-5 md:right-5"
+        className="toast-enter spring-btn fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-20 flex cursor-pointer items-center gap-2 rounded-full border border-line-strong bg-card px-3.5 py-2 text-xs font-semibold text-ink shadow-xl hover:border-primary md:bottom-5 md:right-5"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           {focus ? (
@@ -248,7 +248,7 @@ export default function AlertsPopup({
     <aside
       role="region"
       aria-label="Foco, alertas e lembretes"
-      className="toast-enter fixed bottom-24 right-4 z-20 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[22px] border border-line-strong bg-card shadow-2xl md:bottom-5 md:right-5"
+      className="toast-enter fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 overflow-hidden rounded-[22px] border border-line-strong bg-card shadow-2xl md:inset-x-auto md:bottom-5 md:right-5 md:w-80"
     >
       {focus && (
         <div className="border-b border-line bg-primary-soft/60 px-4 py-3">

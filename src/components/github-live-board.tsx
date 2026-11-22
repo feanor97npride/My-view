@@ -112,7 +112,7 @@ export default function GithubLiveBoard({
     <div className="flex flex-col gap-5">
       {/* Barra de controles + KPIs ao vivo */}
       <BentoCard className="flex flex-wrap items-center justify-between gap-4 !py-4">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="grid w-full grid-cols-2 gap-2.5 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-3">
           <div className="rounded-xl border border-line bg-bg px-3.5 py-2">
             <div className="text-[11px] text-mute">Repositórios</div>
             <div className="font-display text-xl font-bold tabular-nums">{repos.length}</div>
@@ -135,13 +135,13 @@ export default function GithubLiveBoard({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <input
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Filtrar repo ou linguagem…"
-            className="min-h-9 w-52 rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink outline-none focus:border-primary"
+            className="min-h-9 w-full rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink outline-none focus:border-primary sm:w-52"
           />
           <select
             aria-label="Visibilidade"

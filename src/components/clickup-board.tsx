@@ -294,8 +294,8 @@ export default function ClickupBoard({
   return (
     <div className="flex flex-col gap-5">
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <button type="button" onClick={() => setBucketFilter("all")} className={`card cursor-pointer text-left transition-colors ${bucketFilter === "all" ? "!border-primary bg-primary-soft/40" : ""}`}>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5 sm:gap-3">
+        <button type="button" onClick={() => setBucketFilter("all")} className={`card col-span-2 cursor-pointer text-left transition-colors sm:col-span-1 ${bucketFilter === "all" ? "!border-primary bg-primary-soft/40" : ""}`}>
           <div className="text-xs text-mute">Total abertas</div>
           <div className="font-display text-2xl font-bold tabular-nums">{counts.total}</div>
         </button>
@@ -326,13 +326,13 @@ export default function ClickupBoard({
             onChange={(e) => setNewTitle(e.target.value)}
             placeholder="+ Nova tarefa no ClickUp…"
             required
-            className="min-h-10 min-w-[220px] flex-1 rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary"
+            className="min-h-10 w-full rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary sm:w-auto sm:min-w-[220px] sm:flex-1"
           />
           <select
             aria-label="Lista da nova tarefa"
             value={newListId}
             onChange={(e) => setNewListId(e.target.value)}
-            className="min-h-10 rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink"
+            className="min-h-10 min-w-0 flex-1 rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink sm:flex-none"
           >
             {lists.map((l) => (
               <option key={l.id} value={l.id}>{l.name}</option>
@@ -342,31 +342,31 @@ export default function ClickupBoard({
             aria-label="Prazo da nova tarefa"
             value={newDue}
             onChange={(e) => setNewDue(e.target.value as "today" | "tomorrow" | "none")}
-            className="min-h-10 rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink"
+            className="min-h-10 min-w-0 flex-1 rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink sm:flex-none"
           >
             <option value="today">Prazo: Hoje</option>
             <option value="tomorrow">Prazo: Amanhã</option>
             <option value="none">Sem prazo</option>
           </select>
-          <button type="submit" disabled={creating || !newTitle.trim()} className="btn btn-primary spring-btn min-h-10 px-4 text-xs disabled:opacity-50">
+          <button type="submit" disabled={creating || !newTitle.trim()} className="btn btn-primary spring-btn min-h-10 w-full px-4 text-xs disabled:opacity-50 sm:w-auto">
             {creating ? "Criando…" : "Criar tarefa"}
           </button>
         </form>
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <input
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar tarefa…"
-              className="min-h-9 w-56 rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink outline-none focus:border-primary"
+              className="min-h-9 w-full rounded-xl border border-line-strong bg-bg px-3 text-xs text-ink outline-none focus:border-primary sm:w-56"
             />
             <select
               aria-label="Filtrar por lista"
               value={listFilter}
               onChange={(e) => setListFilter(e.target.value)}
-              className="min-h-9 rounded-xl border border-line-strong bg-bg px-2.5 text-xs text-ink"
+              className="min-h-9 w-full rounded-xl border border-line-strong bg-bg px-2.5 text-xs text-ink sm:w-auto"
             >
               <option value="all">Todas as listas ({tasks.length})</option>
               {lists.map((l) => (

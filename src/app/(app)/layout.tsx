@@ -14,14 +14,14 @@ import ThemeToggle from "@/components/theme-toggle";
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-primary" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <div className="flex shrink-0 items-center gap-2">
+      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary md:h-[34px] md:w-[34px]" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v5l3 2" />
         </svg>
       </span>
-      <span className="font-display text-xl font-bold">My View</span>
+      <span className="whitespace-nowrap font-display text-lg font-bold md:text-xl">My View</span>
     </div>
   );
 }
@@ -34,7 +34,7 @@ function SignOut() {
         await signOut({ redirectTo: "/login" });
       }}
     >
-      <button type="submit" className="btn spring-btn min-h-10 px-3 text-[13px]">Sair</button>
+      <button type="submit" className="btn spring-btn min-h-9 px-2.5 text-xs md:min-h-10 md:px-3 md:text-[13px]">Sair</button>
     </form>
   );
 }
@@ -126,9 +126,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SidebarWithData userName={name} />
       </Suspense>
 
-      <header className="flex items-center justify-between border-b border-line bg-card px-4 py-3 md:hidden">
+      <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-line bg-card/90 px-3 pt-[max(0.625rem,env(safe-area-inset-top))] pb-2.5 backdrop-blur-md md:hidden">
         <Brand />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <AssistantTrigger compact />
           <CommandTrigger compact />
           <ThemeToggle />
@@ -136,7 +136,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <div className="min-w-0 flex-1 pb-24 md:pb-0">
+      <div className="min-w-0 flex-1 pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0">
         <Suspense fallback={null}>
           <LiveMeetingBanner />
         </Suspense>

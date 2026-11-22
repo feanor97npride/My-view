@@ -251,15 +251,15 @@ export default function AssistantDrawer() {
       aria-label="Assistente Pessoal"
     >
       <aside
-        className="toast-enter flex h-full w-full max-w-md flex-col border-l border-line-strong bg-card shadow-2xl"
+        className="toast-enter flex h-dvh w-full max-w-md flex-col border-l border-line-strong bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between gap-2 border-b border-line px-5 py-4">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft text-base">✨</span>
-            <div>
-              <h2 className="font-display text-base font-bold text-ink">Assistente Pessoal</h2>
-              <p className="m-0 text-[11px] text-mute">Agenda · ClickUp · Gmail · Notas</p>
+        <header className="flex items-center justify-between gap-2 border-b border-line px-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:px-5 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-sm sm:h-9 sm:w-9 sm:text-base">✨</span>
+            <div className="min-w-0">
+              <h2 className="truncate font-display text-sm font-bold text-ink sm:text-base">Assistente</h2>
+              <p className="m-0 hidden truncate text-[11px] text-mute sm:block">Agenda · ClickUp · Gmail · Notas</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -417,7 +417,7 @@ export default function AssistantDrawer() {
             e.preventDefault();
             void send();
           }}
-          className="flex items-center gap-2 border-t border-line p-4"
+          className="flex items-center gap-2 border-t border-line px-3.5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
         >
           {hasMic && (
             <button
@@ -426,7 +426,7 @@ export default function AssistantDrawer() {
               disabled={sending}
               title={listening ? "Parar gravação" : "Falar com o assistente"}
               aria-label={listening ? "Parar gravação" : "Falar com o assistente"}
-              className={`btn spring-btn min-h-11 px-3 text-sm ${
+              className={`btn spring-btn min-h-11 shrink-0 px-3 text-sm ${
                 listening ? "animate-pulse border-red-500 bg-red-500/10 text-red-600" : ""
               }`}
             >
@@ -439,12 +439,12 @@ export default function AssistantDrawer() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={listening ? "Ouvindo você…" : "Peça algo ao seu assistente…"}
-            className="min-h-11 flex-1 rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary"
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-line-strong bg-bg px-3.5 text-sm text-ink outline-none focus:border-primary"
           />
           <button
             type="submit"
             disabled={sending || !input.trim()}
-            className="btn btn-primary spring-btn min-h-11 px-4 text-sm disabled:opacity-50"
+            className="btn btn-primary spring-btn min-h-11 shrink-0 px-4 text-sm disabled:opacity-50"
           >
             Enviar
           </button>

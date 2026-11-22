@@ -96,6 +96,10 @@
   --font-display: var(--font-space);
 }
 
+html, body {
+  overflow-x: clip;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
@@ -105,7 +109,7 @@ body {
 
 @layer base {
   a { color: var(--link); }
-  a, button, [role="button"], summary, input, select { touch-action: manipulation; }
+  a, button, [role="button"], summary, input, select, textarea { touch-action: manipulation; }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 }
 
@@ -114,8 +118,13 @@ body {
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 16px;
-    padding: 22px 24px;
+    padding: 16px;
     box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  }
+  @media (min-width: 640px) {
+    .card {
+      padding: 22px 24px;
+    }
   }
 
   .chip {
@@ -188,8 +197,13 @@ body {
 .spring-btn:active:not(:disabled) { transform: scale(0.95); }
 
 .bento-card {
-  border-radius: 26px;
+  border-radius: 20px;
   transition: border-color 0.2s ease;
+}
+@media (min-width: 640px) {
+  .bento-card {
+    border-radius: 26px;
+  }
 }
 .bento-card:hover {
   border-color: color-mix(in srgb, var(--primary) 42%, var(--border, var(--line)));
