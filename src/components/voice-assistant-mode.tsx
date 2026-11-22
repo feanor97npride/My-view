@@ -103,6 +103,7 @@ export default function VoiceAssistantMode() {
   const recRef = useRef<SpeechRecLike | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitRef = useRef<(text: string) => void>(() => {});
+  const historyRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
 
   useEffect(() => {
     openRef.current = open;
@@ -215,10 +216,11 @@ export default function VoiceAssistantMode() {
       setActions([]);
 
       try {
+        const nextHistory = [...historyRef.current, { role: "user" as const, content: clean }].slice(-10);
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: clean, history: [] }),
+          body: JSON.stringify({ messages: nextHistory }),
         });
         const j = (await res.json().catch(() => ({}))) as { reply?: string; actions?: string[]; error?: string };
         if (!openRef.current) return;
@@ -230,6 +232,7 @@ export default function VoiceAssistantMode() {
         }
 
         const answer = j.reply;
+        historyRef.current = [...nextHistory, { role: "assistant" as const, content: answer }].slice(-10);
         setReply(answer);
         setActions(j.actions ?? []);
         if (j.actions && j.actions.length > 0) {

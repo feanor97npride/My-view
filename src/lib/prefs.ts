@@ -256,11 +256,11 @@ export async function getAssistantMemory(): Promise<string[]> {
   const map = await loadPrefsMap();
   const raw = map[ASSISTANT_MEMORY];
   if (!Array.isArray(raw)) return [];
-  return raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 25);
+  return raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 60);
 }
 
 export async function setAssistantMemory(facts: string[]): Promise<void> {
-  const clean = [...new Set(facts.map((f) => f.trim().slice(0, 200)).filter(Boolean))].slice(0, 25);
+  const clean = [...new Set(facts.map((f) => f.trim().slice(0, 200)).filter(Boolean))].slice(0, 60);
   await upsertPref(ASSISTANT_MEMORY, clean);
 }
 

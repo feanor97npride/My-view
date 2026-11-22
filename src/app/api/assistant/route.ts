@@ -112,13 +112,40 @@ const TOOLS = [
   },
   {
     name: "save_memory",
-    description: "Salva uma preferência, regra pessoal ou fato duradouro na memória de longo prazo desta conta.",
+    description: "Salva uma preferência, contato VIP, regra pessoal ou fato duradouro na memória de longo prazo desta conta.",
     input_schema: {
       type: "object",
       properties: {
         fact: { type: "string", description: "Fato curto para lembrar no futuro" },
       },
       required: ["fact"],
+    },
+  },
+  {
+    name: "delete_memory",
+    description: "Remove um item da memória de longo prazo quando o usuário pedir para esquecer ou atualizar uma regra.",
+    input_schema: {
+      type: "object",
+      properties: {
+        match: { type: "string", description: "Trecho do texto ou número do item na memória" },
+      },
+      required: ["match"],
+    },
+  },
+  {
+    name: "search_personal_history",
+    description: "Busca por palavra-chave no histórico completo de e-mails sincronizados (inclusive lidos/arquivados), notas rápidas, tarefas do ClickUp e memória pessoal.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Termo, nome, assunto ou palavra-chave para buscar" },
+        scope: {
+          type: "string",
+          enum: ["all", "emails", "notes", "tasks", "memory"],
+          description: "Escopo da busca (padrão: all)",
+        },
+      },
+      required: ["query"],
     },
   },
 ];
@@ -218,6 +245,11 @@ export async function POST(req: Request) {
   const system = `Você é o assistente pessoal integrado ao portal My View de ${session.user.name ?? session.user.email}.
 Responda sempre em português do Brasil, de forma objetiva, calorosa e prática.
 Use as ferramentas disponíveis sempre que o usuário pedir para criar, concluir, adiar, agendar, responder, anotar ou lembrar algo. Nunca invente que executou uma ação se não chamou a ferramenta.
+
+Regras de Memória & Busca Pessoal:
+- Sempre que o usuário mencionar naturalmente uma preferência duradoura, horário preferido, contato VIP, cliente/projeto recorrente ou regra pessoal (mesmo sem dizer "lembre que"), salve discretamente usando \`save_memory\`.
+- Se o usuário pedir para esquecer ou remover uma regra/preferência, use \`delete_memory\`.
+- Sempre que o usuário perguntar sobre um e-mail antigo ou já lido, uma anotação passada, ou qualquer assunto específico que não esteja no resumo imediato abaixo, chame \`search_personal_history\` antes de responder.
 
 Data/hora atual no fuso ${tz}: ${nowLocal} (hoje = ${todayIsoDate}).
 
@@ -363,6 +395,71 @@ ${notes.trim() ? notes.slice(0, 600) : "(vazio)"}`;
             actionsDone.push(`Memória salva: ${fact}`);
           }
           resultText = JSON.stringify({ ok: true, memory: currentMemory });
+        } else if (tu.name === "delete_memory") {
+          const match = String(tu.input.match ?? "").trim().toLowerCase();
+          const num = Number(match);
+          const next =
+            Number.isInteger(num) && num >= 1 && num <= currentMemory.length
+              ? currentMemory.filter((_, i) => i !== num - 1)
+              : currentMemory.filter((m) => !m.toLowerCase().includes(match));
+          await setAssistantMemory(next);
+          currentMemory = next;
+          actionsDone.push(`Memória atualizada`);
+          resultText = JSON.stringify({ ok: true, memory: currentMemory });
+        } else if (tu.name === "search_personal_history") {
+          const q = String(tu.input.query ?? "").trim().toLowerCase();
+          const scope = String(tu.input.scope ?? "all");
+          const terms = q.split(/\s+/).filter(Boolean);
+          const matchesText = (haystack: string) => {
+            const lower = haystack.toLowerCase();
+            return terms.length > 0 && terms.every((t) => lower.includes(t));
+          };
+
+          const foundEmails =
+            (scope === "all" || scope === "emails") && mail
+              ? mail.emails
+                  .filter((e) => matchesText(`${e.sender} ${e.subject} ${e.snippet} ${e.category}`))
+                  .slice(0, 10)
+                  .map((e) => ({
+                    id: e.id,
+                    threadId: e.threadId,
+                    category: e.category,
+                    unread: e.unread,
+                    sender: e.sender,
+                    subject: e.subject,
+                    snippet: e.snippet.slice(0, 180),
+                  }))
+              : [];
+
+          const foundNotes =
+            scope === "all" || scope === "notes"
+              ? notes
+                  .split("\n")
+                  .map((l) => l.trim())
+                  .filter((l) => l && matchesText(l))
+                  .slice(0, 15)
+              : [];
+
+          const foundTasks =
+            (scope === "all" || scope === "tasks") && Array.isArray(tasks)
+              ? tasks
+                  .filter((t) => matchesText(`${t.title} ${t.list} ${t.status}`))
+                  .slice(0, 10)
+                  .map((t) => ({ id: t.id, title: t.title, list: t.list, status: t.status, bucket: t.bucket }))
+              : [];
+
+          const foundMemory =
+            scope === "all" || scope === "memory"
+              ? currentMemory.filter((m) => matchesText(m))
+              : [];
+
+          resultText = JSON.stringify({
+            query: q,
+            emails: foundEmails,
+            notes: foundNotes,
+            tasks: foundTasks,
+            memory: foundMemory,
+          });
         } else {
           resultText = JSON.stringify({ error: "Ferramenta desconhecida" });
         }
