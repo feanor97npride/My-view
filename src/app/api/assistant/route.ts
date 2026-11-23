@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createCalendarEvent, primaryTz, timeline } from "@/lib/calendar";
 import { closingStatus, createClickupTask, getClickupTask, inScopeList, listStatuses, openTasks, updateClickupTask } from "@/lib/clickup";
+import { listDriveFiles, readDriveFileText } from "@/lib/drive";
 import { createTemplateDraft, markEmailsRead, syncEmails } from "@/lib/gmail";
 import {
   addAssistantMemory,
@@ -146,6 +147,30 @@ const TOOLS = [
         },
       },
       required: ["query"],
+    },
+  },
+  {
+    name: "search_google_drive",
+    description: "Busca arquivos e documentos no Google Drive do usuário por nome ou conteúdo.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Termo de busca (ou vazio para arquivos recentes)" },
+        type: { type: "string", enum: ["all", "doc", "sheet", "slide", "pdf", "folder"], description: "Tipo de arquivo" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "read_google_drive_file",
+    description: "Lê o conteúdo textual de um Google Doc, Planilha ou arquivo de texto do Google Drive pelo fileId.",
+    input_schema: {
+      type: "object",
+      properties: {
+        fileId: { type: "string", description: "ID do arquivo no Google Drive" },
+        mimeType: { type: "string", description: "mimeType retornado por search_google_drive" },
+      },
+      required: ["fileId"],
     },
   },
 ];
@@ -460,6 +485,24 @@ ${notes.trim() ? notes.slice(0, 600) : "(vazio)"}`;
             tasks: foundTasks,
             memory: foundMemory,
           });
+        } else if (tu.name === "search_google_drive") {
+          const q = String(tu.input.query ?? "").trim();
+          const type = String(tu.input.type ?? "all") as "all" | "doc" | "sheet" | "slide" | "pdf" | "folder";
+          const found = await listDriveFiles(token, { query: q || undefined, type, pageSize: 12 });
+          resultText = JSON.stringify({
+            files: found.map((f) => ({
+              id: f.id,
+              name: f.name,
+              mimeType: f.mimeType,
+              modifiedTime: f.modifiedTime,
+              url: f.webViewLink,
+            })),
+          });
+        } else if (tu.name === "read_google_drive_file") {
+          const fileId = String(tu.input.fileId ?? "").trim();
+          const mimeType = typeof tu.input.mimeType === "string" ? tu.input.mimeType : undefined;
+          const content = await readDriveFileText(token, fileId, mimeType);
+          resultText = JSON.stringify({ fileId, content: content.slice(0, 6000) });
         } else {
           resultText = JSON.stringify({ error: "Ferramenta desconhecida" });
         }

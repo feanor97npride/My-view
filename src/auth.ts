@@ -8,7 +8,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Google({
       authorization: {
         params: {
-          scope: "openid email profile https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic",
+          scope:
+            "openid email profile https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file",
           access_type: "offline",
           prompt: "consent", // forces a refresh token on every sign-in
         },

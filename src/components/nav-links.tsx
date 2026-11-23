@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/semana", label: "Semana", sideLabel: "Semana", badgeLabel: "", icon: "M3 4h18v17H3zM8 2v4M16 2v4M3 10h18M8 14h2M14 14h2M8 18h2" },
   { href: "/clickup", label: "ClickUp", sideLabel: "ClickUp", badgeLabel: "", icon: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" },
   { href: "/emails", label: "E-mails", sideLabel: "E-mails", badgeLabel: "e-mails de ação não lidos", icon: "M3 6h18v12H3zM3 7l9 6 9-6" },
+  { href: "/drive", label: "Drive", sideLabel: "Drive", badgeLabel: "", icon: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" },
   { href: "/github", label: "GitHub", sideLabel: "GitHub", badgeLabel: "", icon: "M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" },
   { href: "/indicadores", label: "Indic.", sideLabel: "Indicadores", badgeLabel: "", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
   {
@@ -42,7 +43,7 @@ export default function NavLinks({
       className={
         side
           ? "flex flex-col gap-1"
-          : "fixed inset-x-0 bottom-0 z-20 grid grid-cols-7 border-t border-line bg-card/95 px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden"
+          : "fixed inset-x-0 bottom-0 z-20 flex items-center overflow-x-auto border-t border-line bg-card/95 px-1.5 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden"
       }
     >
       {LINKS.map((l) => {
@@ -52,10 +53,10 @@ export default function NavLinks({
         const text = side ? l.sideLabel : l.label;
         const base = side
           ? `flex items-center rounded-xl py-2.5 text-[15px] no-underline ${collapsed ? "justify-center px-2" : "gap-2.5 px-3"}`
-          : "relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-[10px] leading-tight tracking-tight no-underline";
+          : "relative flex min-h-11 min-w-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] leading-tight tracking-tight no-underline";
 
         return (
-          <div key={l.href} className="flex min-w-0 flex-col">
+          <div key={l.href} className={`flex flex-col ${side ? "min-w-0" : "min-w-[52px] flex-1 shrink-0"}`}>
             <Link
               href={l.href}
               title={collapsed ? (badgeTitle ? `${text} (${badgeTitle})` : text) : undefined}
