@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import NavLinks from "@/components/nav-links";
+import { DictateTrigger } from "@/components/quick-dictate";
 
 export type SidebarMeeting = {
   title: string;
@@ -96,6 +97,8 @@ export default function SidebarShell({
           </svg>
         </button>
       </div>
+
+      <DictateTrigger collapsed={collapsed} />
 
       <NavLinks variant="side" badges={badges} collapsed={collapsed} />
 

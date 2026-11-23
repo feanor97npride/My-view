@@ -9,6 +9,7 @@ import AssistantDrawer, { AssistantTrigger } from "@/components/assistant-drawer
 import CommandPalette, { CommandTrigger } from "@/components/command-palette";
 import MeetingBanner from "@/components/meeting-banner";
 import NavLinks from "@/components/nav-links";
+import QuickDictate from "@/components/quick-dictate";
 import SidebarShell, { type SidebarMeeting } from "@/components/sidebar-shell";
 import ThemeToggle from "@/components/theme-toggle";
 import VoiceAssistantMode, { VoiceModeTrigger } from "@/components/voice-assistant-mode";
@@ -156,6 +157,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <CommandPalette />
       <AssistantDrawer />
       <VoiceAssistantMode />
+      <QuickDictate />
     </div>
   );
 }
