@@ -5,6 +5,7 @@ import { primaryTz } from "@/lib/calendar";
 import { closingStatus, createClickupTask, getClickupTask, inScopeList, listStatuses, updateClickupTask } from "@/lib/clickup";
 import { markEmailsRead } from "@/lib/gmail";
 import { originsByTask } from "@/lib/links";
+import { logWarn } from "@/lib/logger";
 import { getDefaultClickupList } from "@/lib/prefs";
 import { dayKey, dueForKey, isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
 
@@ -74,7 +75,9 @@ export async function POST(req: Request) {
       const origins = await originsByTask([body.taskId]).catch(() => ({} as Awaited<ReturnType<typeof originsByTask>>));
       const origin = origins[body.taskId];
       if (origin?.emailId) {
-        await markEmailsRead(token, [origin.emailId]).catch(() => {});
+        await markEmailsRead(token, [origin.emailId]).catch((err) =>
+          logWarn("tasks/action", "Falha ao marcar e-mail de origem como lido", err, { emailId: origin.emailId }),
+        );
       }
       revalidateTag("tasks");
       return NextResponse.json({ ok: true, prevStatus: snap.status, status: closing });

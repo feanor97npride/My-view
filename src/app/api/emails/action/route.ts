@@ -6,6 +6,7 @@ import { createClickupTask, deleteClickupTask, inScopeList } from "@/lib/clickup
 import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
 import { archiveEmail, createFollowupDraft, createReplyDraftWithAI, createTemplateDraft, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
 import { deleteTaskOrigin, saveTaskOrigin } from "@/lib/links";
+import { logWarn } from "@/lib/logger";
 import { getCustomCategories, getDefaultClickupList, getEmailRules, getSnoozedEmails, setEmailRules, setSnoozedEmails } from "@/lib/prefs";
 import { isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
 
@@ -83,14 +84,18 @@ export async function POST(req: Request) {
       });
       // The link back to the e-mail is a bonus: a failure here never undoes the task that was created.
       if (typeof body.emailId === "string" && body.emailId && typeof body.threadId === "string") {
-        await saveTaskOrigin({ taskId: created.id, emailId: body.emailId, threadId: body.threadId, subject: body.title }).catch(() => {});
+        await saveTaskOrigin({ taskId: created.id, emailId: body.emailId, threadId: body.threadId, subject: body.title }).catch((err) =>
+          logWarn("emails/action", "Falha ao salvar origem da tarefa", err, { taskId: created.id }),
+        );
       }
       revalidateTag("tasks");
       return NextResponse.json({ ok: true, taskId: created.id, url: created.url });
     }
     if (body.action === "untask" && typeof body.taskId === "string" && body.taskId) {
       await deleteClickupTask(body.taskId);
-      await deleteTaskOrigin(body.taskId).catch(() => {});
+      await deleteTaskOrigin(body.taskId).catch((err) =>
+        logWarn("emails/action", "Falha ao remover origem da tarefa", err, { taskId: body.taskId }),
+      );
       revalidateTag("tasks");
       return NextResponse.json({ ok: true });
     }
@@ -117,7 +122,7 @@ export async function POST(req: Request) {
         threadId: body.threadId,
         to: body.to ?? "",
         subject: body.subject ?? "(sem assunto)",
-        body: body.body,
+        body: body.body.slice(0, 10_000),
       });
       return NextResponse.json({ ok: true, draftId: created.id });
     }
@@ -141,10 +146,10 @@ export async function POST(req: Request) {
     }
     if (body.action === "summarize" && Array.isArray(body.items)) {
       const summary = await summarizeInformativosWithAI(
-        body.items.map((i) => ({
-          sender: String(i.sender ?? ""),
-          subject: String(i.subject ?? ""),
-          snippet: String(i.snippet ?? ""),
+        body.items.slice(0, 30).map((i) => ({
+          sender: String(i.sender ?? "").slice(0, 200),
+          subject: String(i.subject ?? "").slice(0, 300),
+          snippet: String(i.snippet ?? "").slice(0, 500),
         })),
       );
       return NextResponse.json({ ok: true, summary });
