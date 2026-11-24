@@ -99,13 +99,42 @@ export async function getAttachment(token: string, messageId: string, attachment
   return Buffer.from(b64, "base64");
 }
 
-async function gget<T>(path: string, token: string): Promise<T> {
-  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+async function mapConcurrent<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx]);
+    }
   });
-  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return res.json();
+  await Promise.all(workers);
+  return results;
+}
+
+const isQuotaError = (status: number, body: string) =>
+  status === 429 || (status === 403 && /quota|rateLimitExceeded|userRateLimitExceeded|Total Query Cost/i.test(body));
+
+async function gget<T>(path: string, token: string): Promise<T> {
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (res.ok) return res.json();
+    const text = await res.text();
+    if (attempt < maxAttempts - 1 && isQuotaError(res.status, text)) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 5000)
+        : 400 * 2 ** attempt + Math.floor(Math.random() * 200);
+      await new Promise((r) => setTimeout(r, backoffMs));
+      continue;
+    }
+    throw new Error(`Gmail ${res.status}: ${text.slice(0, 200)}`);
+  }
+  throw new Error("Gmail 429: Quota exceeded");
 }
 
 async function gpost(path: string, token: string, body: unknown): Promise<void> {
@@ -122,13 +151,13 @@ async function syncEmailsUncached(token: string, userEmail: string, userRules: E
   const q = encodeURIComponent("is:unread OR newer_than:7d OR in:inbox");
   const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
   const list = await gget<{ messages?: { id: string }[]; nextPageToken?: string }>(
-    `/messages?q=${q}&maxResults=50${pageParam}`,
+    `/messages?q=${q}&maxResults=35${pageParam}`,
     token,
   );
-  const msgs = await Promise.all(
-    (list.messages ?? []).map((m) =>
-      gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
-    ),
+  const msgs = await mapConcurrent(
+    list.messages ?? [],
+    5,
+    (m) => gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
   );
 
   await ensureEmailsOwner();
@@ -250,10 +279,10 @@ const cachedSyncEmails = unstable_cache(
     return syncEmailsUncached(token, userEmail, userRules, pageKey || undefined);
   },
   ["gmail-sync"],
-  { revalidate: 45, tags: ["emails"] },
+  { revalidate: 180, tags: ["emails"] },
 );
 
-// shortcut: 50 matching messages per page, with nextPageToken for loading older batches
+// shortcut: 35 matching messages per page, with nextPageToken for loading older batches
 export const syncEmails = cache(async (token: string, pageToken?: string) => {
   const [userEmail, userRules] = await Promise.all([
     getCurrentUserEmail().then((e) => e ?? ""),
@@ -301,18 +330,18 @@ const cachedAwaitingReply = unstable_cache(
   async (myEmail: string, minDays: number, dayKey: string, token: string) => {
     void dayKey;
     const list = await gget<{ threads?: { id: string }[] }>(
-      `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=30`,
+      `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=20`,
       token,
     );
-    const threads = await Promise.all(
-      (list.threads ?? []).map((t) =>
-        gget<ThreadLike>(`/threads/${t.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`, token),
-      ),
+    const threads = await mapConcurrent(
+      list.threads ?? [],
+      5,
+      (t) => gget<ThreadLike>(`/threads/${t.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`, token),
     );
     return pickAwaiting(threads, myEmail, new Date(), minDays);
   },
   ["gmail-awaiting-reply"],
-  { revalidate: 45, tags: ["emails"] },
+  { revalidate: 300, tags: ["emails"] },
 );
 
 // Conversations where my message is the last one and nobody answered yet (sent mail, last 14 days).
