@@ -10,6 +10,7 @@ import { DEFAULT_PLAN, normalizePlanPrefs } from "@/lib/task-dates";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
 import {
   DEFAULT_AUTOMATIONS,
+  getAutoReadEmailRules,
   getAutomationPrefs,
   getAwaitingDays,
   getDefaultClickupList,
@@ -22,6 +23,7 @@ import {
   getUserClickupToken,
   getUserGithubToken,
   getUserGoogleTtsKey,
+  setAutoReadEmailRules,
   setAutomationPrefs,
   setAwaitingDays,
   setDefaultClickupList,
@@ -78,6 +80,29 @@ async function saveAwaitingDays(formData: FormData) {
   await setAwaitingDays(normalizeAwaitingDays(formData.get("prazo")));
   revalidatePath("/", "layout");
   redirect("/configuracoes?prazo=ok");
+}
+
+async function addAutoReadRule(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const pattern = String(formData.get("pattern") ?? "").trim().toLowerCase();
+  if (!pattern) redirect("/configuracoes?aba=emails");
+  const current = await getAutoReadEmailRules().catch(() => []);
+  await setAutoReadEmailRules([...current, pattern]);
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?autoread=ok");
+}
+
+async function removeAutoReadRule(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const pattern = String(formData.get("pattern") ?? "").trim().toLowerCase();
+  const current = await getAutoReadEmailRules().catch(() => []);
+  await setAutoReadEmailRules(current.filter((p) => p !== pattern));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?autoread=removida");
 }
 
 async function saveClickupList(formData: FormData) {
@@ -205,7 +230,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; auto?: string; prazo?: string; lista?: string; token?: string; gh?: string; tts?: string; aba?: string; atalhos?: string; plano?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; auto?: string; autoread?: string; prazo?: string; lista?: string; token?: string; gh?: string; tts?: string; aba?: string; atalhos?: string; plano?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -216,7 +241,7 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, googleTtsKey, shortcutsEnabled, planPrefs, automationPrefs] = await Promise.all([
+  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, googleTtsKey, shortcutsEnabled, planPrefs, automationPrefs, autoReadRules] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
@@ -230,6 +255,7 @@ export default async function Configuracoes({
     getKeyboardShortcutsEnabled().catch(() => true),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
     getAutomationPrefs().catch(() => DEFAULT_AUTOMATIONS),
+    getAutoReadEmailRules().catch(() => []),
   ]);
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
@@ -237,7 +263,7 @@ export default async function Configuracoes({
   const initialTab =
     params.aba === "clickup" || params.lista || params.token || params.gh || params.tts || params.atalhos
       ? "clickup"
-      : params.prazo || params.regra || params.tpl
+      : params.aba === "emails" || params.prazo || params.regra || params.tpl || params.autoread
         ? "emails"
         : "agenda";
 
@@ -245,6 +271,8 @@ export default async function Configuracoes({
     params.salvo ? "Calendários salvos."
     : params.aviso ? "Aviso de reunião salvo."
     : params.auto ? "Automações do dia salvas."
+    : params.autoread === "ok" ? "Regra de leitura automática salva."
+    : params.autoread === "removida" ? "Regra de leitura automática removida."
     : params.plano === "ok" ? "Plano do dia salvo."
     : params.prazo ? "Prazo de aguardando resposta salvo."
     : params.regra === "ok" ? "Regra de e-mail salva."
@@ -389,6 +417,43 @@ export default async function Configuracoes({
             </select>
           </label>
           <button type="submit" className="btn btn-primary spring-btn min-h-11">Salvar prazo</button>
+        </form>
+      </BentoCard>
+
+      <BentoCard className="flex flex-col gap-4">
+        <SectionHeader
+          title="Leitura automática em áudio na Home"
+          subtitle="E-mails de ação cujo remetente, domínio ou assunto contenham algum destes termos serão lidos em voz alta automaticamente ao abrir Hoje."
+        />
+        {autoReadRules.length === 0 && (
+          <p className="text-sm text-mute">Nenhum remetente ou termo configurado ainda.</p>
+        )}
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {autoReadRules.map((p) => (
+            <li key={p} className="flex min-h-11 items-center gap-3 border-t border-line first:border-0">
+              <span className="min-w-0 flex-1 truncate font-medium">{p}</span>
+              <span className="chip chip-violet">🔊 Auto</span>
+              <form action={removeAutoReadRule}>
+                <input type="hidden" name="pattern" value={p} />
+                <button type="submit" className="btn spring-btn px-3 py-1.5 text-[13px]" aria-label={`Remover leitura automática de ${p}`}>
+                  Remover
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+        <form action={addAutoReadRule} className="flex flex-wrap items-end gap-3">
+          <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-sm text-mute">
+            Remetente, domínio ou palavra no assunto
+            <input
+              name="pattern"
+              required
+              maxLength={100}
+              placeholder="Ex: diretor@empresa.com, @banco.com, boleto"
+              className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink"
+            />
+          </label>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Adicionar</button>
         </form>
       </BentoCard>
 

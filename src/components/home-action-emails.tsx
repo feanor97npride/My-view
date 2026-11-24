@@ -15,21 +15,33 @@ export type HomeActionEmail = {
   url: string;
 };
 
+function matchesAutoRead(item: HomeActionEmail, rules: string[]): boolean {
+  if (rules.length === 0) return false;
+  const hay = `${item.sender} ${item.subject}`.toLowerCase();
+  return rules.some((r) => r && hay.includes(r));
+}
+
 export default function HomeActionEmails({
   initialItems,
   initialTotal,
+  autoReadRules = [],
+  todayKey = "",
 }: {
   initialItems: HomeActionEmail[];
   initialTotal: number;
+  autoReadRules?: string[];
+  todayKey?: string;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [queuePending, setQueuePending] = useState<HomeActionEmail[]>([]);
   const [createdTaskIds, setCreatedTaskIds] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<ToastAction | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queueCancelledRef = useRef(false);
 
   useEffect(() => {
     setItems(initialItems);
@@ -37,9 +49,58 @@ export default function HomeActionEmails({
   }, [initialItems, initialTotal]);
 
   useEffect(() => () => {
+    queueCancelledRef.current = true;
     if (timer.current) clearTimeout(timer.current);
     stopSpeaking();
   }, []);
+
+  const playQueue = (list: HomeActionEmail[]) => {
+    if (list.length === 0) return;
+    queueCancelledRef.current = false;
+    let idx = 0;
+    const next = () => {
+      if (queueCancelledRef.current || idx >= list.length) {
+        setSpeakingId(null);
+        return;
+      }
+      const m = list[idx++];
+      const script = `E-mail prioritário de ${m.sender}. Assunto: ${m.subject}. ${m.snippet || ""}`;
+      speakPtBr(script, {
+        onStart: () => {
+          if (!queueCancelledRef.current) setSpeakingId(m.id);
+        },
+        onEnd: () => {
+          if (!queueCancelledRef.current) next();
+        },
+      });
+    };
+    next();
+  };
+
+  useEffect(() => {
+    const visible = items.slice(0, 3);
+    const matched = visible.filter((m) => matchesAutoRead(m, autoReadRules));
+    setQueuePending(matched);
+    if (matched.length === 0 || !todayKey) return;
+
+    const storageKey = `myview:autoread:${todayKey}`;
+    let seenIds: string[] = [];
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      if (raw) seenIds = JSON.parse(raw) as string[];
+    } catch {
+      // ignore
+    }
+    const unseen = matched.filter((m) => !seenIds.includes(m.id));
+    if (unseen.length === 0) return;
+
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify([...seenIds, ...unseen.map((m) => m.id)]));
+    } catch {
+      // ignore
+    }
+    playQueue(unseen);
+  }, [items, autoReadRules, todayKey]);
 
   const showToast = (label: string, undo: () => Promise<void>) => {
     if (timer.current) clearTimeout(timer.current);
@@ -125,6 +186,39 @@ export default function HomeActionEmails({
 
   return (
     <>
+      {queuePending.length > 0 && (
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/25 bg-primary-soft/50 px-3 py-2 text-xs">
+          <span className="font-medium text-primary-ink">
+            🔊 {queuePending.length} {queuePending.length === 1 ? "e-mail com leitura automática" : "e-mails com leitura automática"}
+          </span>
+          <div className="flex items-center gap-1.5">
+            {speakingId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  queueCancelledRef.current = true;
+                  stopSpeaking();
+                  setSpeakingId(null);
+                }}
+                className="btn spring-btn min-h-7 bg-card px-2.5 py-0.5 text-[11px]"
+              >
+                ⏹ Parar
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => playQueue(queuePending)}
+                className="btn btn-primary spring-btn min-h-7 px-2.5 py-0.5 text-[11px]"
+              >
+                ▶ Ouvir fila
+              </button>
+            )}
+            <Link href="/configuracoes?aba=emails" className="text-[11px] font-semibold text-primary-ink no-underline hover:underline">
+              Configurar
+            </Link>
+          </div>
+        </div>
+      )}
       {visible.length === 0 ? (
         <p className="text-mute">Nenhum e-mail de ação por ler.</p>
       ) : (
@@ -132,6 +226,7 @@ export default function HomeActionEmails({
           {visible.map((m) => {
             const isBusy = busyId === m.id;
             const hasTask = createdTaskIds.has(m.id);
+            const isAuto = matchesAutoRead(m, autoReadRules);
             return (
               <div
                 key={m.id}
@@ -148,11 +243,15 @@ export default function HomeActionEmails({
                   <span className="break-words font-semibold hover:underline">{m.subject}</span>
                 </a>
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                  <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
+                    {isAuto && <span className="chip chip-primary px-2 py-0.5 text-[10px]">🔊 Auto</span>}
+                  </span>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
+                        queueCancelledRef.current = true;
                         if (speakingId === m.id) {
                           stopSpeaking();
                           setSpeakingId(null);

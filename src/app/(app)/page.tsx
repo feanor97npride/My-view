@@ -22,6 +22,7 @@ import { awaitingReply, syncEmails } from "@/lib/gmail";
 import {
   type AutomationState,
   DEFAULT_AUTOMATIONS,
+  getAutoReadEmailRules,
   getAutomationPrefs,
   getAutomationState,
   getAwaitingDays,
@@ -42,7 +43,7 @@ export default async function Home() {
   const email = session?.user?.email;
 
   // Rodada 1: preferências, tarefas e e-mails em paralelo (sem waterfall sequencial)
-  const [selected, windowMin, planPrefs, awaitingDays, quickNotes, automationPrefs, automationState, tasks, mail] = await Promise.all([
+  const [selected, windowMin, planPrefs, awaitingDays, quickNotes, automationPrefs, automationState, autoReadRules, tasks, mail] = await Promise.all([
     getSelectedCalendars().catch(() => null),
     getMeetingWindow().catch(() => 30),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
@@ -50,6 +51,7 @@ export default async function Home() {
     getQuickNotes().catch(() => ""),
     getAutomationPrefs().catch(() => DEFAULT_AUTOMATIONS),
     getAutomationState().catch((): AutomationState => ({})),
+    getAutoReadEmailRules().catch(() => []),
     openTasks().catch((e: Error) => e),
     token ? syncEmails(token).catch((e: Error) => e) : Promise.resolve(null),
   ]);
@@ -374,6 +376,8 @@ export default async function Home() {
           {mail && !(mail instanceof Error) && (
             <HomeActionEmails
               initialTotal={actions.length}
+              autoReadRules={autoReadRules}
+              todayKey={todayKey}
               initialItems={actions.slice(0, 8).map((m) => ({
                 id: m.id,
                 threadId: m.threadId,

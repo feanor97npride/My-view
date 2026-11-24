@@ -29,6 +29,7 @@ const GOOGLE_TTS_KEY = "google_tts_key";
 const AUTOMATION_PREFS = "automation_prefs";
 const DAILY_BRIEFING_CACHE = "daily_briefing_cache";
 const AUTOMATION_STATE = "automation_state";
+const AUTO_READ_EMAILS = "auto_read_emails";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
 export type StoredChatMsg = { role: "user" | "assistant"; content: string; actions?: string[] };
@@ -404,4 +405,16 @@ export async function setAutomationState(state: AutomationState): Promise<void> 
     ...(state.lastReplanDate ? { lastReplanDate: state.lastReplanDate } : {}),
     followupThreads: Object.fromEntries(entries),
   });
+}
+
+export async function getAutoReadEmailRules(): Promise<string[]> {
+  const map = await loadPrefsMap();
+  const raw = map[AUTO_READ_EMAILS];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((x): x is string => typeof x === "string").map((s) => s.trim().toLowerCase()).filter(Boolean))].slice(0, 30);
+}
+
+export async function setAutoReadEmailRules(rules: string[]): Promise<void> {
+  const clean = [...new Set(rules.map((s) => s.trim().toLowerCase().slice(0, 100)).filter(Boolean))].slice(0, 30);
+  await upsertPref(AUTO_READ_EMAILS, clean);
 }
