@@ -7,12 +7,12 @@ const VALID_TYPES = new Set<DriveTypeFilter>(["all", "doc", "sheet", "slide", "p
 export async function GET(req: Request) {
   const session = await auth();
   const token = session?.accessToken;
-  if (!token) {
+  if (!token || session?.error === "RefreshAccessTokenError") {
     return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
   }
 
   const url = new URL(req.url);
-  const query = url.searchParams.get("q") ?? "";
+  const query = (url.searchParams.get("q") ?? "").slice(0, 200);
   const rawType = (url.searchParams.get("type") ?? "all") as DriveTypeFilter;
   const type = VALID_TYPES.has(rawType) ? rawType : "all";
   const starredOnly = url.searchParams.get("starred") === "1";
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await auth();
   const token = session?.accessToken;
-  if (!token) {
+  if (!token || session?.error === "RefreshAccessTokenError") {
     return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
   }
 
@@ -43,8 +43,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
   }
 
-  const title = typeof body.title === "string" ? body.title.trim() : "";
-  const content = typeof body.content === "string" ? body.content : "";
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 200) : "";
+  const content = typeof body.content === "string" ? body.content.slice(0, 50_000) : "";
   if (!title) {
     return NextResponse.json({ error: "Informe o título do documento." }, { status: 400 });
   }

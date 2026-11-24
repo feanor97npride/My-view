@@ -16,7 +16,9 @@ const INLINE_MIME = new Set([
 export async function GET(req: Request) {
   const session = await auth();
   const token = session?.accessToken;
-  if (!token) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  if (!token || session?.error === "RefreshAccessTokenError") {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const messageId = searchParams.get("messageId") ?? "";

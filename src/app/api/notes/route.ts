@@ -4,7 +4,7 @@ import { getQuickNotes, setQuickNotes } from "@/lib/prefs";
 
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user?.email) {
+  if (!session?.user?.email || session?.error === "RefreshAccessTokenError") {
     return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
   }
   let body: { text?: unknown; append?: unknown };
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Texto inválido." }, { status: 400 });
   }
   if (body.append === true) {
-    const clean = body.text.trim();
+    const clean = body.text.trim().slice(0, 2000);
     if (clean) {
       const current = await getQuickNotes().catch(() => "");
       const next = current.trim() ? `${current.trimEnd()}\n- ${clean}` : `- ${clean}`;
