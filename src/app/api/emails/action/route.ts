@@ -2,7 +2,7 @@ import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createCalendarEvent, deleteCalendarEvent, primaryTz } from "@/lib/calendar";
-import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
+import { createClickupTask, deleteClickupTask, inScopeList } from "@/lib/clickup";
 import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
 import { archiveEmail, createFollowupDraft, createReplyDraftWithAI, createTemplateDraft, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
 import { deleteTaskOrigin, saveTaskOrigin } from "@/lib/links";
@@ -31,7 +31,7 @@ type Payload =
 export async function POST(req: Request) {
   const session = await auth();
   const token = session?.accessToken;
-  if (!token) {
+  if (!token || session?.error === "RefreshAccessTokenError") {
     return NextResponse.json({ error: "Sessão expirada. Entre novamente no portal." }, { status: 401 });
   }
 
@@ -73,7 +73,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
     if (body.action === "task" && body.title) {
-      const listId = body.listId ?? (await getDefaultClickupList().catch(() => ""));
+      const listId = body.listId?.trim() || (await getDefaultClickupList().catch(() => ""));
+      if (!inScopeList(listId)) {
+        return NextResponse.json({ error: "Lista fora das listas configuradas." }, { status: 400 });
+      }
       const created = await createClickupTask(listId, {
         name: body.title,
         description: body.description ?? "",

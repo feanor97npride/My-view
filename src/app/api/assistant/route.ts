@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { ANTHROPIC_MODEL } from "@/lib/ai";
 import { createCalendarEvent, primaryTz, timeline } from "@/lib/calendar";
 import { closingStatus, createClickupTask, getClickupTask, inScopeList, listStatuses, openTasks, updateClickupTask } from "@/lib/clickup";
 import { listDriveFiles, readDriveFileText } from "@/lib/drive";
@@ -306,7 +307,7 @@ ${notes.trim() ? notes.slice(0, 600) : "(vazio)"}`;
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       signal: AbortSignal.timeout(12000),
       body: JSON.stringify({
-        model: "claude-haiku-5-5",
+        model: ANTHROPIC_MODEL,
         max_tokens: 1024,
         system,
         tools: TOOLS,

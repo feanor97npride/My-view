@@ -59,19 +59,45 @@ export function toEvent(e: GEvent, calendar: string): CalEvent {
   };
 }
 
+const isCalendarQuota = (status: number, body: string) =>
+  status === 429 || (status === 403 && /quota|rateLimitExceeded|userRateLimitExceeded/i.test(body));
+
 async function get<T>(path: string, token: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-  if (!res.ok) throw new Error(`Google Calendar ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return res.json();
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    if (res.ok) return res.json();
+    const text = await res.text();
+    if (attempt < maxAttempts - 1 && isCalendarQuota(res.status, text)) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 5000)
+        : 400 * 2 ** attempt + Math.floor(Math.random() * 200);
+      await new Promise((r) => setTimeout(r, backoffMs));
+      continue;
+    }
+    throw new Error(`Google Calendar ${res.status}: ${text.slice(0, 300)}`);
+  }
+  throw new Error("Google Calendar 429: Quota exceeded");
 }
 
 export type CalendarInfo = { id: string; name: string; primary: boolean };
 
+const cachedCalendarList = unstable_cache(
+  async (userEmail: string, token: string) => {
+    void userEmail;
+    const { items } = await get<{
+      items: { id: string; summary: string; summaryOverride?: string; primary?: boolean; timeZone?: string }[];
+    }>("/users/me/calendarList", token);
+    return items;
+  },
+  ["calendar-list"],
+  { revalidate: 600, tags: ["calendar"] },
+);
+
 export const listCalendars = cache(async (token: string): Promise<CalendarInfo[]> => {
-  const { items } = await get<{ items: { id: string; summary: string; summaryOverride?: string; primary?: boolean }[] }>(
-    "/users/me/calendarList",
-    token,
-  );
+  const userEmail = (await getCurrentUserEmail()) ?? "";
+  const items = await cachedCalendarList(userEmail, token);
   return items.map((c) => ({ id: c.id, name: c.summaryOverride ?? c.summary, primary: !!c.primary }));
 });
 
@@ -82,7 +108,8 @@ export function pickCalendars<T extends { id: string }>(all: T[], selected: stri
 }
 
 export const primaryTz = cache(async (token: string): Promise<string> => {
-  const { items } = await get<{ items: { primary?: boolean; timeZone?: string }[] }>("/users/me/calendarList", token);
+  const userEmail = (await getCurrentUserEmail()) ?? "";
+  const items = await cachedCalendarList(userEmail, token);
   return items.find((c) => c.primary)?.timeZone ?? "UTC";
 });
 
@@ -102,12 +129,9 @@ export function busyHours(events: CalEvent[]): number {
   return total / 3_600_000;
 }
 
-async function fetchTimeline(token: string, nowIso: string, days: number, selected: string[] | null | undefined) {
+async function fetchTimeline(token: string, nowIso: string, days: number, selected: string[] | null | undefined, userEmail: string) {
   const now = new Date(nowIso);
-  const { items } = await get<{ items: { id: string; summary: string; primary?: boolean; timeZone?: string }[] }>(
-    "/users/me/calendarList",
-    token,
-  );
+  const items = await cachedCalendarList(userEmail, token);
   const tz = items.find((c) => c.primary)?.timeZone ?? "UTC";
   const start = dayWindow(now, tz).start;
   const end = dayWindow(new Date(now.getTime() + (days - 1) * 86_400_000), tz).end;
@@ -129,13 +153,12 @@ async function fetchTimeline(token: string, nowIso: string, days: number, select
 
 const cachedTimeline = unstable_cache(
   async (userEmail: string, dayKey: string, days: number, selectedKey: string, token: string, nowIso: string, selected: string[] | null | undefined) => {
-    void userEmail;
     void dayKey;
     void selectedKey;
-    return fetchTimeline(token, nowIso, days, selected);
+    return fetchTimeline(token, nowIso, days, selected, userEmail);
   },
   ["calendar-timeline"],
-  { revalidate: 45, tags: ["calendar"] },
+  { revalidate: 180, tags: ["calendar"] },
 );
 
 // Events from the start of today through the end of day `days` (1 = today only).

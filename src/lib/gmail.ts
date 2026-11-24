@@ -3,6 +3,7 @@
 import { neon } from "@neondatabase/serverless";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { cache } from "react";
+import { ANTHROPIC_MODEL } from "./ai";
 import { BULK_CATEGORIES, CATEGORIES, categorize, isCategory, parseCategory, type Category, type EmailRule } from "./email-rules";
 import { pickAwaiting, type Awaiting, type EmailItem, type ThreadLike } from "./email-view";
 import { getEmailRules } from "./prefs";
@@ -36,7 +37,7 @@ async function classifyWithAI(sender: string, subject: string, allowed: readonly
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
-        model: "claude-haiku-5-5",
+        model: ANTHROPIC_MODEL,
         max_tokens: 1024, // the model may emit a thinking block first; 200 was not always enough for the answer to follow
         messages: [
           {
@@ -437,7 +438,7 @@ export async function createReplyDraftWithAI(
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     signal: AbortSignal.timeout(8000),
     body: JSON.stringify({
-      model: "claude-haiku-5-5",
+      model: ANTHROPIC_MODEL,
       max_tokens: 600,
       messages: [
         {
@@ -518,7 +519,7 @@ export async function generateDailyBriefingWithAI(input: {
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
-      model: "claude-haiku-5-5",
+      model: ANTHROPIC_MODEL,
       max_tokens: 1400,
       messages: [
         {
@@ -552,7 +553,7 @@ export async function summarizeInformativosWithAI(
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
-      model: "claude-haiku-5-5",
+      model: ANTHROPIC_MODEL,
       max_tokens: 1024,
       messages: [
         {

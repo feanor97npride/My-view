@@ -30,7 +30,9 @@ async function scoped(taskId: string) {
 export async function POST(req: Request) {
   const session = await auth();
   const token = session?.accessToken;
-  if (!token) return NextResponse.json({ error: "Sessão expirada. Entre novamente no portal." }, { status: 401 });
+  if (!token || session?.error === "RefreshAccessTokenError") {
+    return NextResponse.json({ error: "Sessão expirada. Entre novamente no portal." }, { status: 401 });
+  }
 
   let body: Payload;
   try {
@@ -46,6 +48,9 @@ export async function POST(req: Request) {
       const listId = body.listId?.trim() || (await getDefaultClickupList().catch(() => ""));
       if (!listId) {
         return NextResponse.json({ error: "Configure uma lista padrão em Configurações → ClickUp & Atalhos." }, { status: 400 });
+      }
+      if (!inScopeList(listId)) {
+        return NextResponse.json({ error: "Lista fora das listas configuradas." }, { status: 400 });
       }
       let dueMs: number | null = null;
       if (body.due === "today" || body.due === "tomorrow") {
