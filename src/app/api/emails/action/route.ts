@@ -192,9 +192,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao executar ação";
-    if (msg.includes("403") || msg.includes("insufficient") || msg.includes("ACCESS_TOKEN_SCOPE_INSUFFICIENT")) {
+    const lower = msg.toLowerCase();
+    if (lower.includes("insufficient") || lower.includes("access_token_scope_insufficient")) {
       return NextResponse.json(
-        { error: "Sem permissão de escrita no Google. Clique em Sair e entre novamente." },
+        { error: "Sem permissão de escrita no Google. Clique em Sair, entre novamente e marque todas as caixinhas de permissão do Gmail." },
         { status: 403 },
       );
     }
