@@ -7,11 +7,12 @@ import { normalizeClickupList } from "./clickup";
 import { normalizeWindow } from "./day-summary";
 import { normalizeAwaitingDays } from "./email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs, type PlanPrefs } from "./task-dates";
-import { normalizeRule, type EmailRule } from "./email-rules";
+import { normalizeRule, QUEUE_CATEGORIES, type CustomCategory, type EmailRule, type QueueCategory } from "./email-rules";
 import { getCurrentUserEmail } from "./user";
 
 const CALENDARS = "calendars";
 const EMAIL_RULES = "email_rules";
+const CUSTOM_CATEGORIES = "custom_categories";
 const AWAITING_DAYS = "awaiting_days";
 const MEETING_WINDOW = "meeting_window_min";
 const CLICKUP_LIST = "default_clickup_list";
@@ -128,11 +129,50 @@ export async function setSelectedCalendars(ids: string[]): Promise<void> {
   await upsertPref(CALENDARS, ids);
 }
 
+const VALID_CHIPS = new Set([
+  "chip-violet", "chip-green", "chip-blue", "chip-amber", "chip-pink", "chip-teal", "chip-red", "chip-slate",
+]);
+
+export async function getCustomCategories(): Promise<CustomCategory[]> {
+  const map = await loadPrefsMap();
+  const raw = map[CUSTOM_CATEGORIES];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((c): c is CustomCategory => !!c && typeof c === "object" && typeof (c as CustomCategory).id === "string" && typeof (c as CustomCategory).label === "string")
+    .map((c) => ({
+      id: c.id.trim().toLowerCase().slice(0, 32),
+      label: c.label.trim().slice(0, 40),
+      queue: (QUEUE_CATEGORIES as readonly string[]).includes(c.queue) ? (c.queue as QueueCategory) : "trabalho",
+      chip: VALID_CHIPS.has(c.chip) ? c.chip : "chip-violet",
+    }))
+    .filter((c) => c.id.length >= 2 && c.label.length >= 1)
+    .slice(0, 25);
+}
+
+export async function setCustomCategories(cats: CustomCategory[]): Promise<void> {
+  const seen = new Set<string>();
+  const clean: CustomCategory[] = [];
+  for (const c of cats) {
+    const id = c.id.trim().toLowerCase().slice(0, 32);
+    const label = c.label.trim().slice(0, 40);
+    if (!id || !label || seen.has(id)) continue;
+    seen.add(id);
+    clean.push({
+      id,
+      label,
+      queue: (QUEUE_CATEGORIES as readonly string[]).includes(c.queue) ? c.queue : "trabalho",
+      chip: VALID_CHIPS.has(c.chip) ? c.chip : "chip-violet",
+    });
+  }
+  await upsertPref(CUSTOM_CATEGORIES, clean.slice(0, 25));
+}
+
 // Sender rules the owner edits in Configurações. Anything that no longer validates is dropped on read.
 export async function getEmailRules(): Promise<EmailRule[]> {
-  const map = await loadPrefsMap();
+  const [map, custom] = await Promise.all([loadPrefsMap(), getCustomCategories()]);
+  const customIds = custom.map((c) => c.id);
   const raw = (map[EMAIL_RULES] ?? []) as { match: string; category: string }[];
-  return raw.map(normalizeRule).filter((r): r is EmailRule => r !== null);
+  return raw.map((r) => normalizeRule(r, customIds)).filter((r): r is EmailRule => r !== null);
 }
 
 export async function setEmailRules(rules: EmailRule[]): Promise<void> {

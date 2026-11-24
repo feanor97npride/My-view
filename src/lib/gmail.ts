@@ -143,7 +143,7 @@ async function syncEmailsUncached(token: string, userEmail: string, userRules: E
     m: GMsg;
     sender: string;
     subject: string;
-    category?: Category;
+    category?: string;
     by?: string;
     needsAi?: { allowed: readonly string[]; isBulk: boolean };
   };
@@ -157,7 +157,7 @@ async function syncEmailsUncached(token: string, userEmail: string, userRules: E
     const subject = h("Subject") || "(sem assunto)";
     const hasUnsub = headers.some((x) => x.name.toLowerCase() === "list-unsubscribe");
     const old = knownMap.get(m.id);
-    let category = old?.category as Category | undefined;
+    let category = old?.category as string | undefined;
     let by = old?.classified_by as string | undefined;
     let needsAi: DraftItem["needsAi"];
     const decided = categorize(sender, subject, hasUnsub, userRules);

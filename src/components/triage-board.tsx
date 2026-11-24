@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionToast } from "@/components/ui";
 import { openInObsidian } from "@/lib/obsidian";
 import { speakPtBr, stopSpeaking } from "@/lib/voice";
-import { CATEGORIES } from "@/lib/email-rules";
+import { CATEGORIES, type CustomCategory } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
 import {
   FILAS,
@@ -60,6 +60,7 @@ export default function TriageBoard({
   initialSnoozed = {},
   todayKey = "",
   templates = [],
+  customCategories = [],
   initialNextPageToken = null,
 }: {
   items: TriItem[];
@@ -72,8 +73,16 @@ export default function TriageBoard({
   initialSnoozed?: Record<string, string>;
   todayKey?: string;
   templates?: { id: string; label: string; body: string }[];
+  customCategories?: CustomCategory[];
   initialNextPageToken?: string | null;
 }) {
+  const customMap = useMemo(
+    () => new Map(customCategories.map((c) => [c.id, c])),
+    [customCategories],
+  );
+  const queueOf = (c: string) => customMap.get(c)?.queue ?? filaOf(c);
+  const catLabel = (c: string) => customMap.get(c)?.label ?? label(c);
+  const catChip = (c: string) => customMap.get(c)?.chip ?? CATEGORY_CHIP[c] ?? "chip-slate";
   const [items, setItems] = useState<TriItem[]>(initialItems);
   useEffect(() => setItems(initialItems), [initialItems]);
 
@@ -728,9 +737,9 @@ export default function TriageBoard({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-[0.08em] text-mute">Em foco</span>
-                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={fill(filaOf(focus.category))}>{label(filaOf(focus.category))}</span>
-                    {filaOf(focus.category) !== focus.category && (
-                      <span className={`chip ${CATEGORY_CHIP[focus.category] ?? "chip-slate"}`}>{label(focus.category)}</span>
+                    <span className="rounded-full px-3 py-1 text-xs font-bold" style={fill(queueOf(focus.category))}>{label(queueOf(focus.category))}</span>
+                    {queueOf(focus.category) !== focus.category && (
+                      <span className={`chip ${catChip(focus.category)}`}>{catLabel(focus.category)}</span>
                     )}
                     <select
                       aria-label="Mudar categoria"
@@ -741,6 +750,13 @@ export default function TriageBoard({
                       {CATEGORIES.map((c) => (
                         <option key={c} value={c}>{label(c)}</option>
                       ))}
+                      {customCategories.length > 0 && (
+                        <optgroup label="Suas categorias">
+                          {customCategories.map((c) => (
+                            <option key={c.id} value={c.id}>{c.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </span>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-mute">

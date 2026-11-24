@@ -6,7 +6,7 @@ import { createClickupTask, deleteClickupTask } from "@/lib/clickup";
 import { MAX_RULES, isCategory, normalizeRule } from "@/lib/email-rules";
 import { archiveEmail, createFollowupDraft, createReplyDraftWithAI, createTemplateDraft, deleteDraft, deleteSenderFilter, markEmailsRead, markEmailsUnread, muteSenderFilter, summarizeInformativosWithAI, unarchiveEmail, updateEmailCategory } from "@/lib/gmail";
 import { deleteTaskOrigin, saveTaskOrigin } from "@/lib/links";
-import { getDefaultClickupList, getEmailRules, getSnoozedEmails, setEmailRules, setSnoozedEmails } from "@/lib/prefs";
+import { getCustomCategories, getDefaultClickupList, getEmailRules, getSnoozedEmails, setEmailRules, setSnoozedEmails } from "@/lib/prefs";
 import { isDayKey, isPostpone, postponeKey } from "@/lib/task-dates";
 
 type Payload =
@@ -147,7 +147,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, summary });
     }
     if (body.action === "recategorize") {
-      const rule = normalizeRule({ match: String(body.senderEmail ?? ""), category: String(body.category ?? "") });
+      const custom = await getCustomCategories().catch(() => []);
+      const customIds = custom.map((c) => c.id);
+      const rule = normalizeRule(
+        { match: String(body.senderEmail ?? ""), category: String(body.category ?? "") },
+        customIds,
+      );
       if (!rule) return NextResponse.json({ error: "Remetente ou categoria inválidos para criar regra." }, { status: 400 });
       const existing = await getEmailRules().catch(() => []);
       const prevRule = existing.find((r) => r.match === rule.match)?.category ?? null;
@@ -160,12 +165,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, prevRule });
     }
     if (body.action === "unrecategorize") {
+      const custom = await getCustomCategories().catch(() => []);
+      const customIds = custom.map((c) => c.id);
+      const isAllowedCat = (x: unknown): x is string =>
+        typeof x === "string" && (isCategory(x) || customIds.includes(x));
       const match = String(body.senderEmail ?? "").trim().toLowerCase();
       const existing = await getEmailRules().catch(() => []);
       const others = existing.filter((r) => r.match !== match);
-      const restored = body.hadRule && isCategory(body.hadRule) ? [...others, { match, category: body.hadRule }] : others;
+      const restored = body.hadRule && isAllowedCat(body.hadRule) ? [...others, { match, category: body.hadRule }] : others;
       await setEmailRules(restored);
-      if (body.emailId && isCategory(body.previousCategory)) {
+      if (body.emailId && isAllowedCat(body.previousCategory)) {
         await updateEmailCategory(body.emailId, body.previousCategory, "ai");
       }
       return NextResponse.json({ ok: true });

@@ -36,23 +36,50 @@ export function parseCategory(text: string, allowed: readonly string[] = CATEGOR
   return (word as Category | undefined) ?? null;
 }
 
-export type EmailRule = { match: string; category: Category };
+export const QUEUE_CATEGORIES = [
+  "acao", "financeiro", "agendamento", "trabalho", "pessoal", "informativo",
+] as const;
+export type QueueCategory = (typeof QUEUE_CATEGORIES)[number];
+
+export type CustomCategory = {
+  id: string;
+  label: string;
+  queue: QueueCategory;
+  chip: string;
+};
+
+export function slugifyCategory(label: string): string {
+  return label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+}
+
+export type EmailRule = { match: string; category: string };
 
 export const MAX_RULES = 50;
 const DOMAIN = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/;
 const ADDRESS = /^[^\s@<>]+@[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/;
 
-// Validates user input at the boundary: a domain or an address, plus a known category.
-export function normalizeRule(input: { match: string; category: string }): EmailRule | null {
+// Validates user input at the boundary: a domain or an address, plus a known (or custom) category.
+export function normalizeRule(
+  input: { match: string; category: string },
+  extraCategories: readonly string[] = [],
+): EmailRule | null {
   const match = input.match.trim().toLowerCase();
-  if (!match || match.length > 100 || !isCategory(input.category)) return null;
-  return ADDRESS.test(match) || DOMAIN.test(match) ? { match, category: input.category } : null;
+  const cat = input.category.trim().toLowerCase();
+  const allowed = isCategory(cat) || extraCategories.includes(cat);
+  if (!match || match.length > 100 || !allowed) return null;
+  return ADDRESS.test(match) || DOMAIN.test(match) ? { match, category: cat } : null;
 }
 
 const addressOf = (sender: string) => (sender.match(/<([^>]+)>/)?.[1] ?? sender).trim().toLowerCase();
 
 // First rule that matches wins. A domain rule also covers subdomains ("google.com" matches "mail.google.com").
-export function matchUserRule(sender: string, rules: EmailRule[]): Category | null {
+export function matchUserRule(sender: string, rules: EmailRule[]): string | null {
   const addr = addressOf(sender);
   const domain = addr.split("@")[1] ?? "";
   const hit = rules.find((r) =>
@@ -67,7 +94,7 @@ export function categorize(
   subject: string,
   hasListUnsubscribe: boolean,
   userRules: EmailRule[],
-): { category: Category; by: string } | null {
+): { category: string; by: string } | null {
   const user = matchUserRule(sender, userRules);
   if (user) return { category: user, by: "rule:user" };
   const keyword = ruleCategory(sender, subject);

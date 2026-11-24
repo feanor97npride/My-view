@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import Reconnect from "@/components/reconnect";
 import { listCalendars, pickCalendars } from "@/lib/calendar";
 import { CLICKUP_LISTS, normalizeClickupList } from "@/lib/clickup";
-import { CATEGORIES, MAX_RULES, normalizeRule } from "@/lib/email-rules";
+import { CATEGORIES, MAX_RULES, QUEUE_CATEGORIES, isCategory, normalizeRule, slugifyCategory, type QueueCategory } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, PRAZOS_AGUARDANDO, normalizeAwaitingDays } from "@/lib/email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs } from "@/lib/task-dates";
 import { JANELAS_REUNIAO, normalizeWindow } from "@/lib/day-summary";
@@ -13,6 +13,7 @@ import {
   getAutoReadEmailRules,
   getAutomationPrefs,
   getAwaitingDays,
+  getCustomCategories,
   getDefaultClickupList,
   getEmailRules,
   getKeyboardShortcutsEnabled,
@@ -26,6 +27,7 @@ import {
   setAutoReadEmailRules,
   setAutomationPrefs,
   setAwaitingDays,
+  setCustomCategories,
   setDefaultClickupList,
   setEmailRules,
   setKeyboardShortcutsEnabled,
@@ -172,7 +174,12 @@ async function addRule(formData: FormData) {
   "use server";
   const session = await auth();
   if (!session?.accessToken) throw new Error("Não autenticado");
-  const rule = normalizeRule({ match: String(formData.get("match") ?? ""), category: String(formData.get("category") ?? "") });
+  const custom = await getCustomCategories().catch(() => []);
+  const customIds = custom.map((c) => c.id);
+  const rule = normalizeRule(
+    { match: String(formData.get("match") ?? ""), category: String(formData.get("category") ?? "") },
+    customIds,
+  );
   if (!rule) redirect("/configuracoes?regra=invalida");
   const others = (await getEmailRules()).filter((r) => r.match !== rule.match); // same sender again replaces its category
   if (others.length >= MAX_RULES) redirect("/configuracoes?regra=cheia");
@@ -189,6 +196,36 @@ async function removeRule(formData: FormData) {
   await setEmailRules((await getEmailRules()).filter((r) => r.match !== match));
   revalidatePath("/", "layout");
   redirect("/configuracoes?regra=removida");
+}
+
+async function addCustomCategory(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const label = String(formData.get("label") ?? "").trim().slice(0, 40);
+  const id = slugifyCategory(label);
+  const queueRaw = String(formData.get("queue") ?? "trabalho");
+  const queue = (QUEUE_CATEGORIES as readonly string[]).includes(queueRaw) ? (queueRaw as QueueCategory) : "trabalho";
+  const chip = String(formData.get("chip") ?? "chip-violet");
+  if (!label || id.length < 2 || isCategory(id) || id === "aguardando") {
+    redirect("/configuracoes?cat=invalida");
+  }
+  const current = await getCustomCategories().catch(() => []);
+  const others = current.filter((c) => c.id !== id);
+  await setCustomCategories([...others, { id, label, queue, chip }]);
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?cat=ok");
+}
+
+async function removeCustomCategory(formData: FormData) {
+  "use server";
+  const session = await auth();
+  if (!session?.accessToken) throw new Error("Não autenticado");
+  const id = String(formData.get("id") ?? "").trim().toLowerCase();
+  const current = await getCustomCategories().catch(() => []);
+  await setCustomCategories(current.filter((c) => c.id !== id));
+  revalidatePath("/", "layout");
+  redirect("/configuracoes?cat=removida");
 }
 
 async function addTemplate(formData: FormData) {
@@ -230,7 +267,7 @@ const RULE_MESSAGE: Record<string, [string, string]> = {
 export default async function Configuracoes({
   searchParams,
 }: {
-  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; auto?: string; autoread?: string; prazo?: string; lista?: string; token?: string; gh?: string; tts?: string; aba?: string; atalhos?: string; plano?: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string; regra?: string; tpl?: string; aviso?: string; auto?: string; autoread?: string; cat?: string; prazo?: string; lista?: string; token?: string; gh?: string; tts?: string; aba?: string; atalhos?: string; plano?: string }>;
 }) {
   const [session, params] = await Promise.all([auth(), searchParams]);
   if (!session?.accessToken) {
@@ -241,7 +278,7 @@ export default async function Configuracoes({
     );
   }
 
-  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, googleTtsKey, shortcutsEnabled, planPrefs, automationPrefs, autoReadRules] = await Promise.all([
+  const [all, selected, rules, templates, windowMin, awaitingDays, clickupList, clickupToken, githubToken, googleTtsKey, shortcutsEnabled, planPrefs, automationPrefs, autoReadRules, customCategories] = await Promise.all([
     listCalendars(session.accessToken).catch((e: Error) => e),
     getSelectedCalendars().catch(() => null),
     getEmailRules().catch(() => []),
@@ -256,14 +293,17 @@ export default async function Configuracoes({
     getPlanPrefs().catch(() => DEFAULT_PLAN),
     getAutomationPrefs().catch(() => DEFAULT_AUTOMATIONS),
     getAutoReadEmailRules().catch(() => []),
+    getCustomCategories().catch(() => []),
   ]);
+  const customLabel: Record<string, string> = Object.fromEntries(customCategories.map((c) => [c.id, c.label]));
+  const customChip: Record<string, string> = Object.fromEntries(customCategories.map((c) => [c.id, c.chip]));
   const shown = Array.isArray(all) ? new Set(pickCalendars(all, selected).map((c) => c.id)) : new Set<string>();
   const ruleMsg = params.regra ? RULE_MESSAGE[params.regra] : undefined;
 
   const initialTab =
     params.aba === "clickup" || params.lista || params.token || params.gh || params.tts || params.atalhos
       ? "clickup"
-      : params.aba === "emails" || params.prazo || params.regra || params.tpl || params.autoread
+      : params.aba === "emails" || params.prazo || params.regra || params.tpl || params.autoread || params.cat
         ? "emails"
         : "agenda";
 
@@ -273,6 +313,8 @@ export default async function Configuracoes({
     : params.auto ? "Automações do dia salvas."
     : params.autoread === "ok" ? "Regra de leitura automática salva."
     : params.autoread === "removida" ? "Regra de leitura automática removida."
+    : params.cat === "ok" ? "Nova categoria criada."
+    : params.cat === "removida" ? "Categoria removida."
     : params.plano === "ok" ? "Plano do dia salvo."
     : params.prazo ? "Prazo de aguardando resposta salvo."
     : params.regra === "ok" ? "Regra de e-mail salva."
@@ -459,6 +501,69 @@ export default async function Configuracoes({
 
       <BentoCard className="flex flex-col gap-4">
         <SectionHeader
+          title="Categorias personalizadas"
+          subtitle="Crie suas próprias categorias para organizar e-mails e usar nas regras e na triagem."
+        />
+        {params.cat === "invalida" && (
+          <p role="alert" className="chip chip-red m-0 whitespace-normal rounded-xl px-3.5 py-2.5 text-sm">
+            Informe um nome válido que não conflite com uma categoria padrão.
+          </p>
+        )}
+        {customCategories.length === 0 && (
+          <p className="text-sm text-mute">Nenhuma categoria personalizada criada ainda.</p>
+        )}
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {customCategories.map((c) => (
+            <li key={c.id} className="flex min-h-11 flex-wrap items-center gap-2 border-t border-line py-1.5 first:border-0 sm:gap-3">
+              <span className={`chip ${c.chip}`}>{c.label}</span>
+              <span className="min-w-0 flex-1 text-xs text-mute">Fila: {CATEGORY_LABEL[c.queue]}</span>
+              <form action={removeCustomCategory}>
+                <input type="hidden" name="id" value={c.id} />
+                <button type="submit" className="btn spring-btn px-3 py-1.5 text-[13px]" aria-label={`Remover categoria ${c.label}`}>
+                  Remover
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+        <form action={addCustomCategory} className="flex flex-wrap items-end gap-3">
+          <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-sm text-mute">
+            Nome da categoria
+            <input
+              name="label"
+              required
+              maxLength={40}
+              placeholder="Ex: Clientes VIP, Impostos, Freelance"
+              className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Fila na triagem
+            <select name="queue" defaultValue="trabalho" className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+              {QUEUE_CATEGORIES.map((q) => (
+                <option key={q} value={q}>{CATEGORY_LABEL[q]}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-mute">
+            Cor
+            <select name="chip" defaultValue="chip-violet" className="min-h-11 rounded-xl border border-line-strong bg-card px-3 text-base text-ink">
+              <option value="chip-violet">Roxo</option>
+              <option value="chip-blue">Azul</option>
+              <option value="chip-green">Verde</option>
+              <option value="chip-amber">Âmbar</option>
+              <option value="chip-pink">Rosa</option>
+              <option value="chip-teal">Turquesa</option>
+              <option value="chip-red">Vermelho</option>
+              <option value="chip-slate">Neutro</option>
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary spring-btn min-h-11">Criar categoria</button>
+        </form>
+      </BentoCard>
+
+      <BentoCard className="flex flex-col gap-4">
+        <SectionHeader
           title="Regras de e-mail"
           subtitle="Fixe a categoria de um remetente ou domínio (empresa.com). Suas regras vencem as automáticas e a IA."
         />
@@ -474,7 +579,9 @@ export default async function Configuracoes({
           {rules.map((r) => (
             <li key={r.match} className="flex min-h-11 items-center gap-3 border-t border-line first:border-0">
               <span className="min-w-0 flex-1 truncate font-medium">{r.match}</span>
-              <span className={`chip ${CATEGORY_CHIP[r.category]}`}>{CATEGORY_LABEL[r.category]}</span>
+              <span className={`chip ${CATEGORY_CHIP[r.category] ?? customChip[r.category] ?? "chip-slate"}`}>
+                {CATEGORY_LABEL[r.category] ?? customLabel[r.category] ?? r.category}
+              </span>
               <form action={removeRule}>
                 <input type="hidden" name="match" value={r.match} />
                 <button type="submit" className="btn spring-btn px-3 py-1.5 text-[13px]" aria-label={`Remover a regra de ${r.match}`}>Remover</button>
@@ -500,6 +607,13 @@ export default async function Configuracoes({
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
               ))}
+              {customCategories.length > 0 && (
+                <optgroup label="Suas categorias">
+                  {customCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
           <button type="submit" className="btn btn-primary spring-btn min-h-11">Adicionar regra</button>
