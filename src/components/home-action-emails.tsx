@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ActionToast, type ToastAction } from "@/components/ui";
+import { speakPtBr, stopSpeaking } from "@/lib/voice";
 
 export type HomeActionEmail = {
   id: string;
@@ -25,6 +26,7 @@ export default function HomeActionEmails({
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [createdTaskIds, setCreatedTaskIds] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<ToastAction | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,7 +36,10 @@ export default function HomeActionEmails({
     setTotal(initialTotal);
   }, [initialItems, initialTotal]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    stopSpeaking();
+  }, []);
 
   const showToast = (label: string, undo: () => Promise<void>) => {
     if (timer.current) clearTimeout(timer.current);
@@ -144,7 +149,26 @@ export default function HomeActionEmails({
                 </a>
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
                   <span className="chip chip-violet" style={{ background: "var(--card)" }}>Ação necessária</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (speakingId === m.id) {
+                          stopSpeaking();
+                          setSpeakingId(null);
+                          return;
+                        }
+                        const script = `E-mail de ${m.sender}. Assunto: ${m.subject}. ${m.snippet || ""}`;
+                        speakPtBr(script, {
+                          onStart: () => setSpeakingId(m.id),
+                          onEnd: () => setSpeakingId((cur) => (cur === m.id ? null : cur)),
+                        });
+                      }}
+                      aria-label={speakingId === m.id ? "Parar leitura do e-mail" : `Ouvir e-mail: ${m.subject}`}
+                      className="btn spring-btn min-h-8 bg-card px-2.5 py-1 text-[11px]"
+                    >
+                      {speakingId === m.id ? "⏹ Parar" : "🔊 Ouvir"}
+                    </button>
                     <button
                       type="button"
                       disabled={isBusy}

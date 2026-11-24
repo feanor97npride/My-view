@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionToast } from "@/components/ui";
 import { openInObsidian } from "@/lib/obsidian";
+import { speakPtBr, stopSpeaking } from "@/lib/voice";
 import { CATEGORIES } from "@/lib/email-rules";
 import { CATEGORY_CHIP, CATEGORY_LABEL, decodeEntities, filterEmails } from "@/lib/email-view";
 import {
@@ -98,7 +99,10 @@ export default function TriageBoard({
   const [aiDraftPreview, setAiDraftPreview] = useState<{ emailId: string; text: string } | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => stopSpeaking(), []);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
 
@@ -739,7 +743,28 @@ export default function TriageBoard({
                       ))}
                     </select>
                   </span>
-                  <div className="flex items-center gap-2 text-xs text-mute">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-mute">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (speakingId === focus.id) {
+                          stopSpeaking();
+                          setSpeakingId(null);
+                          return;
+                        }
+                        const who = senderInfo(focus.sender).nome;
+                        const snippet = decodeEntities(focus.snippet);
+                        const script = `E-mail de ${who}. Assunto: ${focus.subject}. ${snippet || ""}`;
+                        speakPtBr(script, {
+                          onStart: () => setSpeakingId(focus.id),
+                          onEnd: () => setSpeakingId((cur) => (cur === focus.id ? null : cur)),
+                        });
+                      }}
+                      aria-label={speakingId === focus.id ? "Parar leitura do e-mail" : `Ouvir e-mail: ${focus.subject}`}
+                      className="btn spring-btn min-h-8 bg-card px-2.5 py-1 text-xs"
+                    >
+                      {speakingId === focus.id ? "⏹ Parar" : "🔊 Ouvir"}
+                    </button>
                     <span>
                       {focus.when}
                       {focus.unread ? " · não lido" : ""}
@@ -750,6 +775,8 @@ export default function TriageBoard({
                         <button
                           type="button"
                           onClick={() => {
+                            stopSpeaking();
+                            setSpeakingId(null);
                             setSched(null);
                             setActionError(null);
                             setFocusId(queue[(idx - 1 + queue.length) % queue.length].id);
@@ -763,6 +790,8 @@ export default function TriageBoard({
                         <button
                           type="button"
                           onClick={() => {
+                            stopSpeaking();
+                            setSpeakingId(null);
                             setSched(null);
                             setActionError(null);
                             setFocusId(queue[(idx + 1) % queue.length].id);
