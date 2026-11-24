@@ -3,6 +3,7 @@ import { neon } from "@neondatabase/serverless";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { cache } from "react";
 
+import { decryptSecret, encryptSecret } from "./crypto";
 import { normalizeClickupList } from "./clickup";
 import { normalizeWindow } from "./day-summary";
 import { normalizeAwaitingDays } from "./email-view";
@@ -215,7 +216,7 @@ export async function getUserClickupToken(): Promise<string | null> {
   if (!email) return null;
   const map = await loadPrefsMap();
   if (CLICKUP_TOKEN in map) {
-    const v = typeof map[CLICKUP_TOKEN] === "string" ? map[CLICKUP_TOKEN].trim() : "";
+    const v = typeof map[CLICKUP_TOKEN] === "string" ? decryptSecret(map[CLICKUP_TOKEN]) : "";
     return v || null;
   }
   if (email === primaryAllowedEmail()) {
@@ -225,7 +226,7 @@ export async function getUserClickupToken(): Promise<string | null> {
 }
 
 export async function setUserClickupToken(token: string): Promise<void> {
-  await upsertPref(CLICKUP_TOKEN, token.trim());
+  await upsertPref(CLICKUP_TOKEN, encryptSecret(token));
   revalidateTag("tasks");
 }
 
@@ -352,7 +353,7 @@ export async function getUserGithubToken(): Promise<string | null> {
   const email = await getCurrentUserEmail();
   const map = await loadPrefsMap();
   if (GITHUB_TOKEN in map) {
-    const val = typeof map[GITHUB_TOKEN] === "string" ? map[GITHUB_TOKEN].trim() : "";
+    const val = typeof map[GITHUB_TOKEN] === "string" ? decryptSecret(map[GITHUB_TOKEN]) : "";
     return val || null;
   }
   const primary = primaryAllowedEmail();
@@ -363,7 +364,7 @@ export async function getUserGithubToken(): Promise<string | null> {
 }
 
 export async function setUserGithubToken(token: string): Promise<void> {
-  await upsertPref(GITHUB_TOKEN, token.trim());
+  await upsertPref(GITHUB_TOKEN, encryptSecret(token));
   revalidateTag("github");
 }
 
@@ -371,7 +372,7 @@ export async function getUserGoogleTtsKey(): Promise<string | null> {
   const email = await getCurrentUserEmail();
   const map = await loadPrefsMap();
   if (GOOGLE_TTS_KEY in map) {
-    const val = typeof map[GOOGLE_TTS_KEY] === "string" ? map[GOOGLE_TTS_KEY].trim() : "";
+    const val = typeof map[GOOGLE_TTS_KEY] === "string" ? decryptSecret(map[GOOGLE_TTS_KEY]) : "";
     return val || null;
   }
   const primary = primaryAllowedEmail();
@@ -382,7 +383,7 @@ export async function getUserGoogleTtsKey(): Promise<string | null> {
 }
 
 export async function setUserGoogleTtsKey(key: string): Promise<void> {
-  await upsertPref(GOOGLE_TTS_KEY, key.trim());
+  await upsertPref(GOOGLE_TTS_KEY, encryptSecret(key));
 }
 
 export async function getAutomationPrefs(): Promise<AutomationPrefs> {

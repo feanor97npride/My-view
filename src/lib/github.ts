@@ -68,14 +68,29 @@ async function ghGet<T>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
+async function mapConcurrent<T, R>(items: readonly T[], limit: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 const cachedRepos = unstable_cache(
   async (userEmail: string, tokenKey: string, token: string) => {
     void userEmail;
     void tokenKey;
     const raw = await ghGet<RawRepo[]>("/user/repos?sort=pushed&per_page=18&affiliation=owner,collaborator", token);
 
-    const enriched: GithubRepoView[] = await Promise.all(
-      raw.map(async (r, idx) => {
+    const enriched: GithubRepoView[] = await mapConcurrent(
+      raw,
+      4,
+      async (r, idx) => {
         let lastCommit: GithubRepoView["lastCommit"] = null;
         let lastRun: GithubRepoView["lastRun"] = null;
         let openPrs: GithubRepoView["openPrs"] = [];
@@ -150,13 +165,13 @@ const cachedRepos = unstable_cache(
           lastCommit,
           lastRun,
         };
-      }),
+      },
     );
 
     return { repos: enriched, fetchedAt: new Date().toISOString() };
   },
   ["github-live-repos"],
-  { revalidate: 25, tags: ["github"] },
+  { revalidate: 60, tags: ["github"] },
 );
 
 export const fetchGithubLiveRepos = cache(async (): Promise<{

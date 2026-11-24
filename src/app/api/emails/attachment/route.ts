@@ -30,6 +30,9 @@ export async function GET(req: Request) {
 
   try {
     const buf = await getAttachment(token, messageId, attachmentId);
+    if (buf.byteLength > 15 * 1024 * 1024) {
+      return NextResponse.json({ error: "Anexo excede o limite de 15 MB para visualização." }, { status: 413 });
+    }
     const canInline = INLINE_MIME.has(rawMime);
     const contentType = canInline ? rawMime : "application/octet-stream";
     const disposition = canInline ? "inline" : "attachment";

@@ -83,14 +83,18 @@ import { getCurrentUserEmail } from "./user";
 async function fetchLists(query: string, token: string): Promise<RawTask[]> {
   const all = await Promise.all(
     LISTS.map(async (id) => {
-      // shortcut: only the first 100 tasks per list (one page), enough for a daily view
-      const res = await fetch(`${API}/list/${id}/task?subtasks=true&${query}`, {
-        headers: { Authorization: token },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const { tasks } = (await res.json()) as { tasks: RawTask[] };
-      return tasks;
+      const listTasks: RawTask[] = [];
+      for (let page = 0; page < 5; page++) {
+        const res = await fetch(`${API}/list/${id}/task?subtasks=true&page=${page}&${query}`, {
+          headers: { Authorization: token },
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`ClickUp ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        const { tasks, last_page } = (await res.json()) as { tasks: RawTask[]; last_page?: boolean };
+        listTasks.push(...tasks);
+        if (last_page || tasks.length < 100) break;
+      }
+      return listTasks;
     }),
   );
   return all.flat();
