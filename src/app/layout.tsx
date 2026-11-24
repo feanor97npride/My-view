@@ -14,6 +14,9 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: { default: "My View", template: "%s · My View" },
   description: "Seu dia em um só lugar: agenda, tarefas e e-mails.",
+  verification: {
+    google: "y7FdhZmKanYavdK3HQ4bEdpGqZL0XPRve5Xv4Pfqvhg",
+  },
 };
 
 // Runs before first paint so the saved (or system) theme never flashes the wrong colors.
