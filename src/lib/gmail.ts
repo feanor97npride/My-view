@@ -6,21 +6,9 @@ import { cache } from "react";
 import { ANTHROPIC_MODEL } from "./ai";
 import { BULK_CATEGORIES, CATEGORIES, categorize, isCategory, parseCategory, type Category, type EmailRule } from "./email-rules";
 import { pickAwaiting, type Awaiting, type EmailItem, type ThreadLike } from "./email-view";
+import { logWarn } from "./logger";
 import { getEmailRules } from "./prefs";
 import { getCurrentUserEmail } from "./user";
-
-let ownerReady: Promise<unknown> | null = null;
-const ensureEmailsOwner = () => {
-  const sql = neon(process.env.DATABASE_URL ?? "");
-  ownerReady ??= (async () => {
-    await sql`ALTER TABLE emails ADD COLUMN IF NOT EXISTS user_email text NOT NULL DEFAULT ''`;
-    await sql`CREATE INDEX IF NOT EXISTS emails_user_idx ON emails (user_email, received_at DESC)`;
-  })().catch((e) => {
-    ownerReady = null;
-    throw e;
-  });
-  return ownerReady;
-};
 
 // Returns a category, or a short error code (stored in classified_by so failures are visible in the database).
 const MAX_BULK_AI = 15;
@@ -161,7 +149,6 @@ async function syncEmailsUncached(token: string, userEmail: string, userRules: E
     (m) => gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
   );
 
-  await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
   const ids = msgs.map((m) => m.id);
   const known = ids.length
@@ -299,7 +286,6 @@ export const syncEmails = cache(async (token: string, pageToken?: string) => {
 });
 
 async function fetchEmailCountsByUser(userEmail: string): Promise<Record<string, number>> {
-  await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
   const rows = await sql`
     SELECT category, COUNT(*)::int AS n FROM emails
@@ -317,7 +303,6 @@ export const emailCounts = cache(async (): Promise<Record<string, number>> => {
 // Unread action e-mails from the database only (no Gmail call), cheap enough for the menu badge on every page.
 export const unreadActionCount = cache(async (): Promise<number> => {
   const userEmail = (await getCurrentUserEmail()) ?? "";
-  await ensureEmailsOwner();
   const sql = neon(process.env.DATABASE_URL ?? "");
   const rows = await sql`
     SELECT COUNT(*)::int AS n FROM emails
@@ -367,7 +352,9 @@ export async function markEmailsRead(token: string, ids: string[]): Promise<void
   await gpost("/messages/batchModify", token, { ids, removeLabelIds: ["UNREAD"] });
   const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
-  await sql`UPDATE emails SET unread = false, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
+  await sql`UPDATE emails SET unread = false, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch((err) =>
+    logWarn("gmail", "Falha ao atualizar unread=false no DB", err),
+  );
   revalidateTag("emails");
 }
 
@@ -376,7 +363,9 @@ export async function markEmailsUnread(token: string, ids: string[]): Promise<vo
   await gpost("/messages/batchModify", token, { ids, addLabelIds: ["UNREAD"] });
   const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
-  await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
+  await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch((err) =>
+    logWarn("gmail", "Falha ao atualizar unread=true no DB", err),
+  );
   revalidateTag("emails");
 }
 
@@ -574,7 +563,9 @@ export async function summarizeInformativosWithAI(
 export async function updateEmailCategory(id: string, category: string, by = "rule:user"): Promise<void> {
   const userEmail = (await getCurrentUserEmail()) ?? "";
   const sql = neon(process.env.DATABASE_URL ?? "");
-  await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id} AND (user_email = ${userEmail} OR user_email = '')`.catch(() => {});
+  await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id} AND (user_email = ${userEmail} OR user_email = '')`.catch((err) =>
+    logWarn("gmail", "Falha ao atualizar categoria no DB", err, { id }),
+  );
   revalidateTag("emails");
 }
 
@@ -591,7 +582,9 @@ export async function muteSenderFilter(token: string, senderEmail: string, archi
   if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = (await res.json()) as { id: string };
   if (archiveIds.length > 0) {
-    await gpost("/messages/batchModify", token, { ids: archiveIds, removeLabelIds: ["INBOX"] }).catch(() => {});
+    await gpost("/messages/batchModify", token, { ids: archiveIds, removeLabelIds: ["INBOX"] }).catch((err) =>
+      logWarn("gmail", "Falha ao arquivar após criar filtro", err),
+    );
   }
   revalidateTag("emails");
   return { id: j.id };
@@ -605,7 +598,9 @@ export async function deleteSenderFilter(token: string, filterId: string, restor
   });
   if (!res.ok && res.status !== 404) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
   if (restoreIds.length > 0) {
-    await gpost("/messages/batchModify", token, { ids: restoreIds, addLabelIds: ["INBOX"] }).catch(() => {});
+    await gpost("/messages/batchModify", token, { ids: restoreIds, addLabelIds: ["INBOX"] }).catch((err) =>
+      logWarn("gmail", "Falha ao restaurar após remover filtro", err),
+    );
   }
   revalidateTag("emails");
 }

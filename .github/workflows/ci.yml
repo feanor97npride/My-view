@@ -21,5 +21,5 @@ jobs:
         run: |
           for f in scripts/test-*.ts; do
             echo "Running $f"
-            node --experimental-strip-types "$f"
+            npx --yes tsx "$f"
           done

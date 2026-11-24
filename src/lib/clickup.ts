@@ -3,11 +3,29 @@ import { cache } from "react";
 
 // Read-only ClickUp tasks from the lists the owner picked (ids from the workspace hierarchy).
 const API = "https://api.clickup.com/api/v2";
-export const CLICKUP_LISTS = [
+const DEFAULT_CLICKUP_LISTS: { id: string; name: string }[] = [
   { id: "1000480000007959", name: "Sustentação CFTV · Sprint 01" },
   { id: "901321112382", name: "Projeto G.A. Plus Ultra" },
   { id: "1000480000007117", name: "Academy · Projeto Portal" },
-] as const;
+];
+
+function parseConfiguredLists(): { id: string; name: string }[] {
+  const raw = process.env.CLICKUP_LISTS?.trim();
+  if (!raw) return DEFAULT_CLICKUP_LISTS;
+  const parsed = raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const idx = entry.indexOf(":");
+      if (idx === -1) return { id: entry, name: entry };
+      return { id: entry.slice(0, idx).trim(), name: entry.slice(idx + 1).trim() || entry.slice(0, idx).trim() };
+    })
+    .filter((item) => item.id.length > 0);
+  return parsed.length > 0 ? parsed : DEFAULT_CLICKUP_LISTS;
+}
+
+export const CLICKUP_LISTS = parseConfiguredLists();
 const LISTS = CLICKUP_LISTS.map((l) => l.id);
 
 export function normalizeClickupList(id: unknown): string {
