@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import RefreshButton from "@/components/refresh-button";
 import { ActionToast } from "@/components/ui";
 import { openInObsidian } from "@/lib/obsidian";
 import { speakPtBr, stopSpeaking } from "@/lib/voice";
@@ -652,12 +653,16 @@ export default function TriageBoard({
       {/* 1 · Cabeçalho */}
       <header className="flex flex-wrap items-center justify-between gap-5">
         <div className="min-w-0 flex-1 basis-[320px]">
-          <p className="text-sm capitalize text-mute">{dateLine}</p>
+          <p className="flex flex-wrap items-center gap-2 text-sm capitalize text-mute">
+            <span>{dateLine}</span>
+            <span aria-hidden="true">·</span>
+            <RefreshButton />
+          </p>
           <h1 className="font-display text-[34px] font-bold leading-[1.05] tracking-tight md:text-[44px]">
             {title.total} <span style={{ color: "var(--k-acao)" }}>{title.destaque}</span>
           </h1>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-5 md:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:gap-4">
           <label className="min-w-0 flex-1 md:w-64 md:flex-none">
             <span className="sr-only">Buscar por remetente ou assunto</span>
             <input
@@ -669,6 +674,17 @@ export default function TriageBoard({
               className="min-h-11 w-full rounded-2xl border border-line-strong bg-card px-4 text-base text-ink"
             />
           </label>
+          {nextPageToken && (
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={() => void loadMoreEmails()}
+              title="Buscar mais e-mails não tratados no Gmail"
+              className="btn spring-btn min-h-11 whitespace-nowrap disabled:opacity-60"
+            >
+              {loadingMore ? "Buscando…" : "+ Mais não tratados"}
+            </button>
+          )}
           <div className="flex items-center gap-3">
             <div
               role="img"
@@ -1052,20 +1068,20 @@ export default function TriageBoard({
                   <button type="button" className="btn" onClick={() => setFiltro(null)}>Limpar filtro</button>
                   {filtro !== "aguardando" && nextPageToken && (
                     <button type="button" disabled={loadingMore} onClick={() => void loadMoreEmails()} className="btn btn-primary spring-btn disabled:opacity-60">
-                      {loadingMore ? "Carregando mais 50…" : "Carregar mais 50 anteriores"}
+                      {loadingMore ? "Carregando mais 35…" : "Carregar mais 35 anteriores"}
                     </button>
                   )}
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-start gap-3">
-                <h2 className="font-display text-3xl font-bold">{loadingMore ? "Buscando mais 50 e-mails…" : "Tudo em dia"}</h2>
+                <h2 className="font-display text-3xl font-bold">{loadingMore ? "Buscando mais 35 e-mails…" : "Tudo em dia"}</h2>
                 <p className="m-0 text-mute">Você leu todos os e-mails que pedem atenção. {plural(items.filter((i) => !i.unread).length, "e-mail lido", "e-mails lidos")} na janela.</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <a href="#leitura-leve" className="btn">Ir para a Leitura leve</a>
                   {nextPageToken && (
                     <button type="button" disabled={loadingMore} onClick={() => void loadMoreEmails()} className="btn btn-primary spring-btn disabled:opacity-60">
-                      {loadingMore ? "Carregando…" : "Carregar mais 50 anteriores"}
+                      {loadingMore ? "Carregando…" : "Carregar mais 35 anteriores"}
                     </button>
                   )}
                 </div>
