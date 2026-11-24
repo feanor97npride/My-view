@@ -104,7 +104,10 @@ async function LiveAlertsPopup() {
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  const name = session?.user?.name ?? "Usuário";
+  if (!session?.accessToken || session?.error === "RefreshAccessTokenError") {
+    return <>{children}</>;
+  }
+  const name = session.user?.name ?? "Usuário";
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">

@@ -7,6 +7,7 @@ import DayRing from "@/components/day-ring";
 import HomeActionEmails from "@/components/home-action-emails";
 import LiveMeeting from "@/components/live-meeting";
 import ProactivePlan from "@/components/proactive-plan";
+import PublicHome from "@/components/public-home";
 import QuickNotes from "@/components/quick-notes";
 import Reconnect from "@/components/reconnect";
 import RefreshButton from "@/components/refresh-button";
@@ -35,11 +36,14 @@ import {
 import { DEFAULT_PLAN, dayKey, freeBlocks, planOverdue, scoreTask, suggestPlan, zonedMs, type Candidate } from "@/lib/task-dates";
 import { extractFinance, filaOf, financeDueDays } from "@/lib/triage";
 
-export const metadata = { title: "Hoje" };
+export const metadata = { title: "MY-VIEW" };
 
 export default async function Home() {
   const session = await auth();
   const token = session?.accessToken;
+  if (!token || session?.error === "RefreshAccessTokenError") {
+    return <PublicHome />;
+  }
   const email = session?.user?.email;
 
   // Rodada 1: preferências, tarefas e e-mails em paralelo (sem waterfall sequencial)

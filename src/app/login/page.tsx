@@ -14,7 +14,7 @@ export default function Login() {
           </svg>
         </span>
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">My View</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight">MY-VIEW</h1>
           <p className="mt-1 text-mute">Seu dia em um só lugar: agenda, tarefas e e-mails.</p>
         </div>
         <form

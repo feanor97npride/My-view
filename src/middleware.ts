@@ -5,7 +5,7 @@ const PUBLIC_PATHS = ["/login", "/privacidade", "/termos"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const isPublic = pathname === "/" || PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   const sessionInvalid = !req.auth || req.auth.error === "RefreshAccessTokenError";
   if (sessionInvalid && !isPublic) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));

@@ -12,7 +12,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: { default: "My View", template: "%s · My View" },
+  title: { default: "MY-VIEW", template: "%s · MY-VIEW" },
   description: "Seu dia em um só lugar: agenda, tarefas e e-mails.",
   verification: {
     google: "pcJeh2gBIUcX3up3_HKAGt_RKVpuW6V19Al6D3EvmtA",
