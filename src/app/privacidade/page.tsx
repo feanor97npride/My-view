@@ -135,11 +135,44 @@ export default function PrivacidadePage() {
         </section>
 
         <section className="flex flex-col gap-2 text-sm leading-relaxed">
-          <h2 className="font-display text-lg font-semibold">7. Contato</h2>
+          <h2 className="font-display text-lg font-semibold">7. Cookies e armazenamento local</h2>
           <p>
-            Para dúvidas sobre esta Política de Privacidade ou solicitações de exclusão de dados do MY-VIEW, entre em contato pelo repositório oficial do projeto em{" "}
+            O MY-VIEW utiliza apenas cookies estritamente necessários para autenticação e proteção contra CSRF (Auth.js), além de <code>localStorage</code> no navegador para salvar sua preferência de tema (claro ou escuro). Não utilizamos cookies de rastreamento ou publicidade de terceiros.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2 text-sm leading-relaxed">
+          <h2 className="font-display text-lg font-semibold">8. Privacidade de menores e alterações nesta política</h2>
+          <p>
+            O MY-VIEW não é direcionado a menores de 13 anos e não coleta intencionalmente dados de crianças. Esta Política de Privacidade pode ser atualizada periodicamente; alterações relevantes serão refletidas na data de atualização no topo desta página.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2 text-sm leading-relaxed">
+          <h2 className="font-display text-lg font-semibold">9. Contato</h2>
+          <p>
+            Para dúvidas sobre esta Política de Privacidade ou solicitações de acesso/exclusão de dados do MY-VIEW, entre em contato pelo repositório oficial do projeto em{" "}
             <a href="https://github.com/feanor97npride/My-view/issues" target="_blank" rel="noreferrer" className="underline">
               github.com/feanor97npride/My-view
+            </a>.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2 border-t border-line pt-4 text-xs leading-relaxed text-mute">
+          <h2 className="font-display text-sm font-semibold text-ink">English Summary — Google API User Data Disclosure</h2>
+          <p>
+            <strong>MY-VIEW</strong> (<a href="https://my-view-rho.vercel.app/" className="underline">https://my-view-rho.vercel.app/</a>) accesses Google user data (basic profile, Google Calendar events, Gmail metadata/drafts/filters, and Google Drive files) solely to provide personal productivity features to the signed-in user. Full email bodies are never stored in our database. We do not sell, rent, or share Google user data with third parties for advertising or AI model training. MY-VIEW&apos;s use and transfer of information received from Google APIs adheres to the{" "}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements. Users can revoke access anytime at{" "}
+            <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer" className="underline">
+              myaccount.google.com/permissions
             </a>.
           </p>
         </section>
