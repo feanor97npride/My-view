@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
+const PUBLIC_PATHS = ["/login", "/privacidade", "/termos"];
+
 export default auth((req) => {
-  if (!req.auth && !req.nextUrl.pathname.startsWith("/login")) {
+  const { pathname } = req.nextUrl;
+  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (!req.auth && !isPublic) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 });

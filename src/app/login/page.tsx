@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { signIn } from "@/auth";
 
 export const metadata = { title: "Entrar" };
@@ -25,6 +26,11 @@ export default function Login() {
         >
           <button type="submit" className="btn btn-primary spring-btn w-full py-3 text-base">Entrar com Google</button>
         </form>
+        <footer className="flex items-center justify-center gap-3 text-xs text-mute">
+          <Link href="/privacidade" className="hover:underline">Política de Privacidade</Link>
+          <span aria-hidden="true">·</span>
+          <Link href="/termos" className="hover:underline">Termos de Serviço</Link>
+        </footer>
       </section>
     </main>
   );
