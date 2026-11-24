@@ -43,9 +43,13 @@ export async function GET(req: Request) {
     }));
     return NextResponse.json({ items, nextPageToken: mail.nextPageToken });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erro ao carregar mais e-mails." },
-      { status: 502 },
-    );
+    const msg = err instanceof Error ? err.message : "Erro ao carregar mais e-mails.";
+    if (/quota|rateLimitExceeded|userRateLimitExceeded|Total Query Cost|429/i.test(msg)) {
+      return NextResponse.json(
+        { error: "Cota temporária do Gmail atingida. Aguarde cerca de 1 minuto e tente novamente." },
+        { status: 429 },
+      );
+    }
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

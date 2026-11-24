@@ -9,6 +9,7 @@ export async function POST() {
   }
   revalidateTag("tasks");
   revalidateTag("emails");
+  revalidateTag("emails-awaiting");
   revalidateTag("calendar");
   revalidateTag("prefs");
   return NextResponse.json({ ok: true });

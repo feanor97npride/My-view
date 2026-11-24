@@ -104,20 +104,24 @@ async function mapConcurrent<T, R>(items: readonly T[], limit: number, fn: (item
 const isQuotaError = (status: number, body: string) =>
   status === 429 || (status === 403 && /quota|rateLimitExceeded|userRateLimitExceeded|Total Query Cost/i.test(body));
 
-async function gget<T>(path: string, token: string): Promise<T> {
+async function gmailFetch(url: string, token: string, init?: RequestInit): Promise<Response> {
   const maxAttempts = 4;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init?.headers ?? {}),
+      },
       cache: "no-store",
     });
-    if (res.ok) return res.json();
+    if (res.ok) return res;
     const text = await res.text();
     if (attempt < maxAttempts - 1 && isQuotaError(res.status, text)) {
       const retryAfter = Number(res.headers.get("retry-after"));
       const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
-        ? Math.min(retryAfter * 1000, 5000)
-        : 400 * 2 ** attempt + Math.floor(Math.random() * 200);
+        ? Math.min(retryAfter * 1000, 8000)
+        : 1000 * 2 ** attempt + Math.floor(Math.random() * 400);
       await new Promise((r) => setTimeout(r, backoffMs));
       continue;
     }
@@ -126,26 +130,29 @@ async function gget<T>(path: string, token: string): Promise<T> {
   throw new Error("Gmail 429: Quota exceeded");
 }
 
+async function gget<T>(path: string, token: string): Promise<T> {
+  const res = await gmailFetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, token);
+  return res.json();
+}
+
 async function gpost(path: string, token: string, body: unknown): Promise<void> {
-  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+  await gmailFetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, token, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    cache: "no-store",
   });
-  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
 async function syncEmailsUncached(token: string, userEmail: string, userRules: EmailRule[], pageToken?: string) {
   const q = encodeURIComponent("is:unread OR newer_than:7d OR in:inbox");
   const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
   const list = await gget<{ messages?: { id: string }[]; nextPageToken?: string }>(
-    `/messages?q=${q}&maxResults=35${pageParam}`,
+    `/messages?q=${q}&maxResults=25${pageParam}`,
     token,
   );
   const msgs = await mapConcurrent(
     list.messages ?? [],
-    5,
+    3,
     (m) => gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
   );
 
@@ -267,10 +274,10 @@ const cachedSyncEmails = unstable_cache(
     return syncEmailsUncached(token, userEmail, userRules, pageKey || undefined);
   },
   ["gmail-sync"],
-  { revalidate: 180, tags: ["emails"] },
+  { revalidate: 300, tags: ["emails"] },
 );
 
-// shortcut: 35 matching messages per page, with nextPageToken for loading older batches
+// shortcut: 25 matching messages per page, with nextPageToken for loading older batches
 export const syncEmails = cache(async (token: string, pageToken?: string) => {
   const [userEmail, userRules] = await Promise.all([
     getCurrentUserEmail().then((e) => e ?? ""),
@@ -278,9 +285,28 @@ export const syncEmails = cache(async (token: string, pageToken?: string) => {
   ]);
   const rulesKey = JSON.stringify(userRules);
   const raw = await cachedSyncEmails(userEmail, rulesKey, pageToken ?? "", token, userRules);
+
+  // Overlay latest unread/category state from Postgres (0 Gmail quota cost) so actions reflect immediately without busting the Gmail cache.
+  const ids = raw.emails.map((e) => e.id);
+  const dbRows = ids.length
+    ? await neon(process.env.DATABASE_URL ?? "")`
+        SELECT id, unread, category FROM emails
+        WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`
+        .catch(() => [] as { id: string; unread: boolean; category: string }[])
+    : [];
+  const dbMap = new Map(dbRows.map((r) => [r.id as string, r]));
+
   return {
     counts: raw.counts,
-    emails: raw.emails.map((e) => ({ ...e, receivedAt: new Date(e.receivedAt) })),
+    emails: raw.emails.map((e) => {
+      const ov = dbMap.get(e.id);
+      return {
+        ...e,
+        unread: ov ? Boolean(ov.unread) : e.unread,
+        category: ov?.category ? String(ov.category) : e.category,
+        receivedAt: new Date(e.receivedAt),
+      };
+    }),
     nextPageToken: raw.nextPageToken,
   };
 });
@@ -316,22 +342,21 @@ const cachedAwaitingReply = unstable_cache(
   async (myEmail: string, minDays: number, dayKey: string, token: string) => {
     void dayKey;
     const list = await gget<{ threads?: { id: string }[] }>(
-      `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=20`,
+      `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=15`,
       token,
     );
     const threads = await mapConcurrent(
       list.threads ?? [],
-      5,
+      3,
       (t) => gget<ThreadLike>(`/threads/${t.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`, token),
     );
     return pickAwaiting(threads, myEmail, new Date(), minDays);
   },
   ["gmail-awaiting-reply"],
-  { revalidate: 300, tags: ["emails"] },
+  { revalidate: 600, tags: ["emails-awaiting"] },
 );
 
 // Conversations where my message is the last one and nobody answered yet (sent mail, last 14 days).
-// shortcut: at most 30 conversations, upgrade with pagination if you send more than that in two weeks
 export const awaitingReply = cache(async (token: string, myEmail: string, minDays: number, now = new Date()): Promise<Awaiting[]> => {
   const dayKey = now.toISOString().slice(0, 10);
   return cachedAwaitingReply(myEmail, minDays, dayKey, token);
@@ -339,12 +364,10 @@ export const awaitingReply = cache(async (token: string, myEmail: string, minDay
 
 export async function archiveEmail(token: string, id: string): Promise<void> {
   await gpost(`/messages/${encodeURIComponent(id)}/modify`, token, { removeLabelIds: ["INBOX"] });
-  revalidateTag("emails");
 }
 
 export async function unarchiveEmail(token: string, id: string): Promise<void> {
   await gpost(`/messages/${encodeURIComponent(id)}/modify`, token, { addLabelIds: ["INBOX"] });
-  revalidateTag("emails");
 }
 
 export async function markEmailsRead(token: string, ids: string[]): Promise<void> {
@@ -355,7 +378,6 @@ export async function markEmailsRead(token: string, ids: string[]): Promise<void
   await sql`UPDATE emails SET unread = false, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch((err) =>
     logWarn("gmail", "Falha ao atualizar unread=false no DB", err),
   );
-  revalidateTag("emails");
 }
 
 export async function markEmailsUnread(token: string, ids: string[]): Promise<void> {
@@ -366,7 +388,6 @@ export async function markEmailsUnread(token: string, ids: string[]): Promise<vo
   await sql`UPDATE emails SET unread = true, updated_at = now() WHERE id = ANY(${ids}) AND (user_email = ${userEmail} OR user_email = '')`.catch((err) =>
     logWarn("gmail", "Falha ao atualizar unread=true no DB", err),
   );
-  revalidateTag("emails");
 }
 
 export async function createFollowupDraft(
@@ -566,27 +587,23 @@ export async function updateEmailCategory(id: string, category: string, by = "ru
   await sql`UPDATE emails SET category = ${category}, classified_by = ${by}, updated_at = now() WHERE id = ${id} AND (user_email = ${userEmail} OR user_email = '')`.catch((err) =>
     logWarn("gmail", "Falha ao atualizar categoria no DB", err, { id }),
   );
-  revalidateTag("emails");
 }
 
 export async function muteSenderFilter(token: string, senderEmail: string, archiveIds: string[] = []): Promise<{ id: string }> {
-  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/settings/filters", {
+  const res = await gmailFetch("https://gmail.googleapis.com/gmail/v1/users/me/settings/filters", token, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       criteria: { from: senderEmail },
       action: { removeLabelIds: ["INBOX"] },
     }),
-    cache: "no-store",
   });
-  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = (await res.json()) as { id: string };
   if (archiveIds.length > 0) {
     await gpost("/messages/batchModify", token, { ids: archiveIds, removeLabelIds: ["INBOX"] }).catch((err) =>
       logWarn("gmail", "Falha ao arquivar após criar filtro", err),
     );
   }
-  revalidateTag("emails");
   return { id: j.id };
 }
 
@@ -602,5 +619,4 @@ export async function deleteSenderFilter(token: string, filterId: string, restor
       logWarn("gmail", "Falha ao restaurar após remover filtro", err),
     );
   }
-  revalidateTag("emails");
 }

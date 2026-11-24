@@ -207,6 +207,12 @@ export async function POST(req: Request) {
         { status: 403 },
       );
     }
+    if (/quota|ratelimitexceeded|userratelimitexceeded|total query cost|429/.test(lower)) {
+      return NextResponse.json(
+        { error: "Cota temporária do Gmail atingida. Aguarde cerca de 1 minuto e tente novamente." },
+        { status: 429 },
+      );
+    }
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }
