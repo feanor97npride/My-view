@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   title: { default: "My View", template: "%s · My View" },
   description: "Seu dia em um só lugar: agenda, tarefas e e-mails.",
   verification: {
-    google: "y7FdhZmKanYavdK3HQ4bEdpGqZL0XPRve5Xv4Pfqvhg",
+    google: "pcJeh2gBIUcX3up3_HKAGt_RKVpuW6V19Al6D3EvmtA",
   },
 };
 
