@@ -3,19 +3,39 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getUserGoogleTtsKey } from "@/lib/prefs";
 
-async function synthesizeEdgeTts(text: string, voiceName: string): Promise<Buffer> {
-  const tts = new MsEdgeTTS({ connectionTimeoutMs: 6000, synthesisTimeoutMs: 12000 });
+async function createEdgeTtsStream(text: string, voiceName: string): Promise<ReadableStream<Uint8Array> | null> {
+  const tts = new MsEdgeTTS({ connectionTimeoutMs: 3500, synthesisTimeoutMs: 9000 });
   await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-  const { audioStream } = tts.toStream(text, { rate: "+4%" });
-  const chunks: Buffer[] = [];
-  try {
-    for await (const chunk of audioStream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-  } finally {
+  const { audioStream } = tts.toStream(text, { rate: "+6%" });
+  const iterator = audioStream[Symbol.asyncIterator]();
+  const first = await iterator.next();
+  if (first.done) {
     tts.close();
+    return null;
   }
-  return Buffer.concat(chunks);
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        const firstBuf = Buffer.isBuffer(first.value) ? first.value : Buffer.from(first.value);
+        controller.enqueue(new Uint8Array(firstBuf));
+        while (true) {
+          const { done, value } = await iterator.next();
+          if (done) break;
+          const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+          controller.enqueue(new Uint8Array(chunk));
+        }
+        controller.close();
+      } catch (err) {
+        controller.error(err);
+      } finally {
+        tts.close();
+      }
+    },
+    cancel() {
+      tts.close();
+    },
+  });
 }
 
 export async function POST(req: Request) {
@@ -52,7 +72,7 @@ export async function POST(req: Request) {
           body: JSON.stringify({
             input: { text },
             voice: { languageCode: "pt-BR", name: gVoice },
-            audioConfig: { audioEncoding: "MP3", speakingRate: 1.05 },
+            audioConfig: { audioEncoding: "MP3", speakingRate: 1.08 },
           }),
           cache: "no-store",
         },
@@ -62,7 +82,7 @@ export async function POST(req: Request) {
         if (json.audioContent) {
           return new NextResponse(Buffer.from(json.audioContent, "base64"), {
             status: 200,
-            headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
+            headers: { "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=300" },
           });
         }
       }
@@ -74,15 +94,15 @@ export async function POST(req: Request) {
   try {
     const edgeVoice =
       body.voice === "pt-BR-AntonioNeural" ? "pt-BR-AntonioNeural" : "pt-BR-FranciscaNeural";
-    const buf = await synthesizeEdgeTts(text, edgeVoice);
-    if (buf.length === 0) {
+    const stream = await createEdgeTtsStream(text, edgeVoice);
+    if (!stream) {
       return new NextResponse(null, { status: 204 });
     }
-    return new NextResponse(new Uint8Array(buf), {
+    return new NextResponse(stream, {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
-        "Cache-Control": "no-store",
+        "Cache-Control": "private, max-age=300",
       },
     });
   } catch {
