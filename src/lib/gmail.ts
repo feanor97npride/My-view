@@ -105,7 +105,7 @@ const isQuotaError = (status: number, body: string) =>
   status === 429 || (status === 403 && /quota|rateLimitExceeded|userRateLimitExceeded|Total Query Cost/i.test(body));
 
 async function gmailFetch(url: string, token: string, init?: RequestInit): Promise<Response> {
-  const maxAttempts = 4;
+  const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await fetch(url, {
       ...init,
@@ -120,14 +120,17 @@ async function gmailFetch(url: string, token: string, init?: RequestInit): Promi
     if (attempt < maxAttempts - 1 && isQuotaError(res.status, text)) {
       const retryAfter = Number(res.headers.get("retry-after"));
       const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
-        ? Math.min(retryAfter * 1000, 8000)
-        : 1000 * 2 ** attempt + Math.floor(Math.random() * 400);
+        ? Math.min(retryAfter * 1000, 6000)
+        : 1200 * 2 ** attempt + Math.floor(Math.random() * 400);
       await new Promise((r) => setTimeout(r, backoffMs));
       continue;
     }
+    if (isQuotaError(res.status, text)) {
+      throw new Error("Cota temporária do Gmail atingida (Total Query Cost). Aguarde ~1 minuto e tente novamente.");
+    }
     throw new Error(`Gmail ${res.status}: ${text.slice(0, 200)}`);
   }
-  throw new Error("Gmail 429: Quota exceeded");
+  throw new Error("Cota temporária do Gmail atingida (Total Query Cost). Aguarde ~1 minuto e tente novamente.");
 }
 
 async function gget<T>(path: string, token: string): Promise<T> {
@@ -143,18 +146,55 @@ async function gpost(path: string, token: string, body: unknown): Promise<void> 
   });
 }
 
+async function fallbackEmailsFromDb(userEmail: string) {
+  const sql = neon(process.env.DATABASE_URL ?? "");
+  const rows = await sql`
+    SELECT id, sender, subject, received_at, unread, category
+    FROM emails
+    WHERE user_email = ${userEmail}
+    ORDER BY received_at DESC
+    LIMIT 25`;
+  const counts = await fetchEmailCountsByUser(userEmail);
+  return {
+    counts,
+    emails: rows.map((r) => ({
+      id: String(r.id),
+      threadId: String(r.id),
+      sender: String(r.sender ?? ""),
+      subject: String(r.subject ?? "(sem assunto)"),
+      receivedAt: new Date(r.received_at as string | Date).toISOString(),
+      unread: Boolean(r.unread),
+      category: String(r.category ?? "informativo"),
+      snippet: "",
+      attachments: [] as EmailAttachment[],
+    })),
+    nextPageToken: null,
+  };
+}
+
 async function syncEmailsUncached(token: string, userEmail: string, userRules: EmailRule[], pageToken?: string) {
   const q = encodeURIComponent("is:unread OR newer_than:7d OR in:inbox");
   const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
-  const list = await gget<{ messages?: { id: string }[]; nextPageToken?: string }>(
-    `/messages?q=${q}&maxResults=25${pageParam}`,
-    token,
-  );
-  const msgs = await mapConcurrent(
-    list.messages ?? [],
-    3,
-    (m) => gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
-  );
+  let list: { messages?: { id: string }[]; nextPageToken?: string };
+  let msgs: GMsg[];
+  try {
+    list = await gget<{ messages?: { id: string }[]; nextPageToken?: string }>(
+      `/messages?q=${q}&maxResults=20${pageParam}`,
+      token,
+    );
+    msgs = await mapConcurrent(
+      list.messages ?? [],
+      2,
+      (m) => gget<GMsg>(`/messages/${m.id}?format=full&fields=${encodeURIComponent(MSG_FIELDS)}`, token),
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (!pageToken && /Cota temporária do Gmail|quota|429/i.test(msg)) {
+      logWarn("gmail", "Usando fallback do Postgres devido à cota do Gmail", err);
+      return fallbackEmailsFromDb(userEmail);
+    }
+    throw err;
+  }
 
   const sql = neon(process.env.DATABASE_URL ?? "");
   const ids = msgs.map((m) => m.id);
@@ -274,10 +314,10 @@ const cachedSyncEmails = unstable_cache(
     return syncEmailsUncached(token, userEmail, userRules, pageKey || undefined);
   },
   ["gmail-sync"],
-  { revalidate: 300, tags: ["emails"] },
+  { revalidate: 600, tags: ["emails"] },
 );
 
-// shortcut: 25 matching messages per page, with nextPageToken for loading older batches
+// shortcut: 20 matching messages per page, with nextPageToken for loading older batches
 export const syncEmails = cache(async (token: string, pageToken?: string) => {
   const [userEmail, userRules] = await Promise.all([
     getCurrentUserEmail().then((e) => e ?? ""),
@@ -342,18 +382,18 @@ const cachedAwaitingReply = unstable_cache(
   async (myEmail: string, minDays: number, dayKey: string, token: string) => {
     void dayKey;
     const list = await gget<{ threads?: { id: string }[] }>(
-      `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=15`,
+      `/threads?q=${encodeURIComponent("in:sent newer_than:14d")}&maxResults=10`,
       token,
     );
     const threads = await mapConcurrent(
       list.threads ?? [],
-      3,
+      2,
       (t) => gget<ThreadLike>(`/threads/${t.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`, token),
     );
     return pickAwaiting(threads, myEmail, new Date(), minDays);
   },
   ["gmail-awaiting-reply"],
-  { revalidate: 600, tags: ["emails-awaiting"] },
+  { revalidate: 900, tags: ["emails-awaiting"] },
 );
 
 // Conversations where my message is the last one and nobody answered yet (sent mail, last 14 days).

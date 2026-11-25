@@ -36,11 +36,11 @@ export default async function Emails({ searchParams }: { searchParams: Promise<P
   ]);
 
   // shortcut: a Gmail failure shows a banner instead of an error page
-  const [mail, tz, waiting] = await Promise.all([
+  const [mail, tz] = await Promise.all([
     syncEmails(token).catch((e: Error) => e),
     primaryTz(token).catch(() => "UTC"),
-    awaitingReply(token, account, awaitingDays).catch((e: Error) => e),
   ]);
+  const waiting = mail instanceof Error ? null : await awaitingReply(token, account, awaitingDays).catch((e: Error) => e);
   const now = new Date();
   const todayKey = dayKey(now, tz);
   const taskOf = mail instanceof Error ? {} : await tasksByEmail(mail.emails.map((m) => m.id)).catch(() => ({}) as Record<string, string>);
