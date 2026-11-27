@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MvaBrand } from "@/components/mva-brand";
 
 export const metadata: Metadata = {
   title: "Termos de Serviço",
@@ -10,14 +11,8 @@ export default function TermosPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 px-4 py-10">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/" className="inline-flex items-center gap-2.5 text-sm font-medium text-mute hover:underline">
-          <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
-            </svg>
-          </span>
-          <span className="font-display text-lg font-bold tracking-tight text-ink">MY-VIEW</span>
+        <Link href="/" className="no-underline">
+          <MvaBrand />
         </Link>
         <nav className="flex items-center gap-4 text-sm text-mute">
           <Link href="/" className="hover:underline">Início</Link>

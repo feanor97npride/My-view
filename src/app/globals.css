@@ -1,85 +1,155 @@
 @import "tailwindcss";
 
-/* Light theme tokens. The dark set below is applied via data-theme, set before first paint by the script in layout.tsx. */
+/* MVA Solutions · Design tokens (v1.0) integrated with My View semantic variables.
+   Light theme is the default; dark theme is applied via data-theme="dark" before first paint. */
 :root {
-  --bg: #f4f5fa;
-  --card: #ffffff;
-  --line: #e3e6f0;
-  --line-strong: #cbd5e1;
-  --ink: #0f172a;
-  --mute: #475569;
-  --link: #4338ca;
-  --primary: #4338ca;
-  --primary-soft: #eef0ff;
-  --primary-ink: #312e81;
-  --on-primary: #ffffff;
+  /* Brand fixed palette */
+  --mva-ink: #0B1220;
+  --mva-blue: #2563EB;
+  --mva-blue-mid: #3B82F6;
+  --mva-blue-light: #60A5FA;
+  --mva-blue-ice: #93C5FD;
+  --mva-blue-tint: #EFF6FF;
+  --mva-blue-hover: #1D4ED8;
+  --mva-graphite: #5B6472;
+  --mva-slate: #94A3B8;
+  --mva-mist: #F4F6F9;
+  --mva-line: #E4E8EE;
+  --mva-white: #FFFFFF;
 
-  --red-fg: #b91c1c; --red-bg: #fee2e2;
-  --amber-fg: #92400e; --amber-bg: #fef3c7;
-  --green-fg: #065f46; --green-bg: #d1fae5;
-  --violet-fg: #5b21b6; --violet-bg: #ede9fe;
-  --blue-fg: #1e40af; --blue-bg: #dbeafe;
-  --slate-fg: #334155; --slate-bg: #e2e8f0;
-  --pink-fg: #9d174d; --pink-bg: #fce7f3;
-  --teal-fg: #115e59; --teal-bg: #ccfbf1;
+  /* Semantic surfaces & text (Light) */
+  --bg: var(--mva-mist);
+  --card: var(--mva-white);
+  --surface-3: #EAF0F8;
+  --line: var(--mva-line);
+  --line-strong: #CBD5E1;
+  --ink: var(--mva-ink);
+  --mute: var(--mva-graphite);
+  --link: var(--mva-blue);
+  --primary: var(--mva-blue);
+  --primary-hover: var(--mva-blue-hover);
+  --primary-soft: var(--mva-blue-tint);
+  --primary-ink: #1D4ED8;
+  --on-primary: var(--mva-white);
 
-  --chart-busy: #4338ca;
-  --chart-free: #e3e6f0;
-  --trend: #059669;
-  --s1: #4338ca; --s2: #b45309; --s3: #be185d; --s4: #0f766e; --s5: #475569; --s6: #1d4ed8; --s7: #6d28d9;
-  --cat-acao: #6d28d9; --cat-financeiro: #047857; --cat-agendamento: #1d4ed8; --cat-trabalho: #b45309;
-  --cat-pessoal: #be185d; --cat-aguardando: #0f766e; --cat-informativo: #64748b;
-  --cat-compras: #c2410c; --cat-viagens: #0369a1; --cat-seguranca: #b91c1c; --cat-saude: #15803d;
-  --cat-educacao: #4f46e5; --cat-social: #a21caf; --cat-promocao: #94a3b8;
+  /* MVA logo & tonal sequence (Light) */
+  --logo-m: var(--mva-ink);
+  --logo-v: var(--mva-blue);
+  --logo-a: var(--mva-blue-light);
+  --logo-sub: var(--mva-graphite);
+  --tone-1: var(--mva-ink);
+  --tone-2: var(--mva-blue);
+  --tone-3: var(--mva-blue-mid);
+  --tone-4: var(--mva-blue-light);
 
-  /* Triage screen: category fills and the text on them (from the spec, readable on both themes). */
+  /* Functional status & chip tones */
+  --red-fg: #DC2626; --red-bg: #FEE2E2;
+  --amber-fg: #B45309; --amber-bg: #FEF3C7;
+  --green-fg: #15803D; --green-bg: #DCFCE7;
+  --violet-fg: #1D4ED8; --violet-bg: #DBEAFE;
+  --blue-fg: #1E40AF; --blue-bg: #EFF6FF;
+  --slate-fg: #334155; --slate-bg: #E2E8F0;
+  --pink-fg: #9D174D; --pink-bg: #FCE7F3;
+  --teal-fg: #0F766E; --teal-bg: #CCFBF1;
+
+  --chart-busy: #2563EB;
+  --chart-free: #E4E8EE;
+  --trend: #16A34A;
+  --s1: #0B1220; --s2: #2563EB; --s3: #3B82F6; --s4: #60A5FA; --s5: #5B6472; --s6: #0F766E; --s7: #D97706;
+  --cat-acao: #2563EB; --cat-financeiro: #16A34A; --cat-agendamento: #3B82F6; --cat-trabalho: #D97706;
+  --cat-pessoal: #0F766E; --cat-aguardando: #0284C7; --cat-informativo: #5B6472;
+  --cat-compras: #C2410C; --cat-viagens: #0369A1; --cat-seguranca: #DC2626; --cat-saude: #16A34A;
+  --cat-educacao: #2563EB; --cat-social: #475569; --cat-promocao: #94A3B8;
+
+  /* Triage screen: high-contrast queue tiles */
   --k-acao: #ff6b4a; --kt-acao: #1a0b07;
   --k-financeiro: #ffc83d; --kt-financeiro: #231a00;
-  --k-agendamento: #4da3ff; --kt-agendamento: #04182e;
-  --k-trabalho: #9b7bff; --kt-trabalho: #160a3a;
-  --k-pessoal: #6ee7b7; --kt-pessoal: #052e1f;
-  --k-informativo: #e2e8f0; --kt-informativo: #1e293b;
+  --k-agendamento: #60A5FA; --kt-agendamento: #0B1220;
+  --k-trabalho: #93C5FD; --kt-trabalho: #0B1220;
+  --k-pessoal: #6EE7B7; --kt-pessoal: #052E1F;
+  --k-informativo: #E4E8EE; --kt-informativo: #0B1220;
   --k-aguardando: var(--card); --kt-aguardando: var(--ink);
-  --surface-3: #eef0fa;
+
+  --dot-grid: radial-gradient(color-mix(in srgb, var(--mva-blue-light) 45%, transparent) 1.2px, transparent 1.5px);
+  --dot-size: 18px;
+  --shadow-sm: 0 1px 2px rgba(11, 18, 32, 0.06);
+  --shadow: 0 8px 24px rgba(11, 18, 32, 0.08);
 
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #0b1020;
-  --card: #131a2e;
-  --line: #232c47;
-  --line-strong: #38426b;
-  --ink: #e8ecf8;
-  --mute: #a3aed0;
-  --link: #a5b4fc;
-  --primary: #818cf8;
-  --primary-soft: #1e2547;
-  --primary-ink: #c7d2fe;
-  --on-primary: #0b1020;
+  --bg: #070C16;
+  --card: #111A2B;
+  --surface-3: #0E1626;
+  --line: #1F2A3D;
+  --line-strong: #2E3D57;
+  --ink: #F1F5F9;
+  --mute: #94A3B8;
+  --link: #60A5FA;
+  --primary: #3B82F6;
+  --primary-hover: #60A5FA;
+  --primary-soft: #10203F;
+  --primary-ink: #93C5FD;
+  --on-primary: #FFFFFF;
 
-  --red-fg: #fca5a5; --red-bg: #3f1d24;
-  --amber-fg: #fcd34d; --amber-bg: #3a2e12;
-  --green-fg: #6ee7b7; --green-bg: #12332a;
-  --violet-fg: #c4b5fd; --violet-bg: #2b2250;
-  --blue-fg: #93c5fd; --blue-bg: #172a52;
-  --slate-fg: #cbd5e1; --slate-bg: #27304d;
-  --pink-fg: #f9a8d4; --pink-bg: #3d1c2e;
-  --teal-fg: #5eead4; --teal-bg: #123a36;
+  --logo-m: #FFFFFF;
+  --logo-v: #93C5FD;
+  --logo-a: #3B82F6;
+  --logo-sub: #94A3B8;
+  --tone-1: #FFFFFF;
+  --tone-2: #93C5FD;
+  --tone-3: #60A5FA;
+  --tone-4: #3B82F6;
 
-  --chart-busy: #818cf8;
-  --chart-free: #232c47;
-  --trend: #34d399;
-  --s1: #818cf8; --s2: #fbbf24; --s3: #f472b6; --s4: #2dd4bf; --s5: #94a3b8; --s6: #60a5fa; --s7: #a78bfa;
-  --cat-acao: #a78bfa; --cat-financeiro: #34d399; --cat-agendamento: #60a5fa; --cat-trabalho: #fbbf24;
-  --cat-pessoal: #f472b6; --cat-aguardando: #2dd4bf; --cat-informativo: #94a3b8;
-  --cat-compras: #fb923c; --cat-viagens: #38bdf8; --cat-seguranca: #f87171; --cat-saude: #4ade80;
-  --cat-educacao: #818cf8; --cat-social: #e879f9; --cat-promocao: #64748b;
+  --red-fg: #FCA5A5; --red-bg: #3F1D24;
+  --amber-fg: #FCD34D; --amber-bg: #3A2E12;
+  --green-fg: #6EE7B7; --green-bg: #12332A;
+  --violet-fg: #93C5FD; --violet-bg: #10203F;
+  --blue-fg: #93C5FD; --blue-bg: #172A52;
+  --slate-fg: #CBD5E1; --slate-bg: #1E293B;
+  --pink-fg: #F9A8D4; --pink-bg: #3D1C2E;
+  --teal-fg: #5EEAD4; --teal-bg: #123A36;
 
-  --k-informativo: #2b2d5a; --kt-informativo: #f2f2fa;
-  --surface-3: #22244a;
+  --chart-busy: #3B82F6;
+  --chart-free: #1F2A3D;
+  --trend: #34D399;
+  --s1: #FFFFFF; --s2: #93C5FD; --s3: #60A5FA; --s4: #3B82F6; --s5: #94A3B8; --s6: #2DD4BF; --s7: #FBBF24;
+  --cat-acao: #60A5FA; --cat-financeiro: #34D399; --cat-agendamento: #93C5FD; --cat-trabalho: #FBBF24;
+  --cat-pessoal: #2DD4BF; --cat-aguardando: #38BDF8; --cat-informativo: #94A3B8;
+  --cat-compras: #FB923C; --cat-viagens: #38BDF8; --cat-seguranca: #F87171; --cat-saude: #4ADE80;
+  --cat-educacao: #60A5FA; --cat-social: #CBD5E1; --cat-promocao: #64748B;
+
+  --k-informativo: #1E293B; --kt-informativo: #F1F5F9;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 
   color-scheme: dark;
+}
+
+/* Always-dark executive sections (hero, dark callouts, footer) */
+.theme-ink {
+  --bg: #0B1220;
+  --card: #111A2B;
+  --surface-3: #0E1626;
+  --ink: #F8FAFC;
+  --mute: #A7B3C6;
+  --line: #1F2A3D;
+  --line-strong: #2E3D57;
+  --primary: #2563EB;
+  --primary-hover: #3B82F6;
+  --primary-soft: #10203F;
+  --primary-ink: #93C5FD;
+  --on-primary: #FFFFFF;
+  --logo-m: #FFFFFF;
+  --logo-v: #93C5FD;
+  --logo-a: #3B82F6;
+  --logo-sub: #94A3B8;
+  --tone-1: #FFFFFF;
+  --tone-2: #93C5FD;
+  --tone-3: #60A5FA;
+  --tone-4: #3B82F6;
+  background-color: var(--bg);
+  color: var(--ink);
 }
 
 @theme inline {
@@ -94,6 +164,7 @@
   --color-primary-ink: var(--primary-ink);
   --font-sans: var(--font-inter);
   --font-display: var(--font-space);
+  --font-mono: var(--font-mono);
 }
 
 html, body {
@@ -104,13 +175,18 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-inter), system-ui, sans-serif;
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+::selection {
+  background: var(--mva-blue);
+  color: #FFFFFF;
 }
 
 @layer base {
-  a { color: var(--link); }
+  a { color: var(--link); text-underline-offset: 3px; }
   a, button, [role="button"], summary, input, select, textarea { touch-action: manipulation; }
-  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
 }
 
 @layer components {
@@ -119,7 +195,7 @@ body {
     border: 1px solid var(--line);
     border-radius: 16px;
     padding: 16px;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+    box-shadow: var(--shadow-sm);
   }
   @media (min-width: 640px) {
     .card {
@@ -127,13 +203,55 @@ body {
     }
   }
 
+  .kicker {
+    display: inline-block;
+    font-family: var(--font-mono), monospace;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--primary);
+  }
+  .kicker::before { content: "[ "; }
+  .kicker::after { content: " ]"; }
+
+  .dot-grid {
+    background-image: var(--dot-grid);
+    background-size: var(--dot-size) var(--dot-size);
+  }
+
+  .mva-num {
+    display: inline-grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    font-family: var(--font-space), sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    color: #FFFFFF;
+    background: var(--tone-1);
+    flex: none;
+  }
+  :root[data-theme="dark"] .mva-num,
+  .theme-ink .mva-num {
+    color: var(--mva-ink);
+  }
+  .mva-num-2 { background: var(--tone-2); }
+  .mva-num-3 { background: var(--tone-3); }
+  .mva-num-4 { background: var(--tone-4); color: var(--mva-ink); }
+
   .chip {
     display: inline-block;
     max-width: 100%;
-    padding: 2px 10px;
+    padding: 3px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-family: var(--font-mono), monospace;
+    font-size: 11px;
     font-weight: 600;
+    letter-spacing: 0.03em;
     white-space: nowrap;
   }
   .chip-red { color: var(--red-fg); background: var(--red-bg); }
@@ -154,26 +272,26 @@ body {
     border: 1px solid var(--line-strong);
     background: var(--card);
     color: var(--ink);
-    border-radius: 10px;
-    padding: 8px 14px;
+    border-radius: 8px;
+    padding: 8px 16px;
     font: inherit;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    transition: background 150ms cubic-bezier(0.2, 0.7, 0.2, 1), border-color 150ms ease, color 150ms ease, transform 150ms ease;
   }
-  .btn:hover { background: var(--primary-soft); }
+  .btn:hover { background: var(--primary-soft); border-color: color-mix(in srgb, var(--primary) 45%, var(--line-strong)); }
   .btn-primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
-  .btn-primary:hover { background: var(--primary); filter: brightness(1.08); }
+  .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: var(--on-primary); }
 }
 
 /* Moon shows in light mode, sun in dark mode. */
 :root[data-theme="dark"] .theme-moon { display: none; }
 :root:not([data-theme="dark"]) .theme-sun { display: none; }
 
-/* Cockpit 2A motion primitives */
+/* Motion primitives */
 @keyframes springIn {
-  0% { opacity: 0; transform: scale(0.97) translateY(8px); }
-  70% { transform: scale(1.005) translateY(-1px); }
+  0% { opacity: 0; transform: scale(0.98) translateY(8px); }
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 @keyframes toastIn {
@@ -184,33 +302,32 @@ body {
   from { transform: scaleX(1); }
   to { transform: scaleX(0); }
 }
+@keyframes pulseDraw {
+  to { stroke-dashoffset: 0; }
+}
 
-.spring-card { animation: springIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.spring-card { animation: springIn 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .spring-d1 { animation-delay: 0.03s; }
 .spring-d2 { animation-delay: 0.08s; }
 .spring-d3 { animation-delay: 0.13s; }
-.toast-enter { animation: toastIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.toast-enter { animation: toastIn 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .toast-bar { transform-origin: left; animation: shrinkBar 6s linear forwards; }
+.pulse-line { stroke-dasharray: 1600; stroke-dashoffset: 1600; animation: pulseDraw 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) 0.2s forwards; }
 
 .spring-btn {
-  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.16s ease, opacity 0.16s ease;
+  transition: transform 0.15s cubic-bezier(0.2, 0.7, 0.2, 1), background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
-.spring-btn:active:not(:disabled) { transform: scale(0.95); }
+.spring-btn:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
 
 .bento-card {
-  border-radius: 20px;
-  transition: border-color 0.2s ease;
-}
-@media (min-width: 640px) {
-  .bento-card {
-    border-radius: 26px;
-  }
+  border-radius: 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .bento-card:hover {
-  border-color: color-mix(in srgb, var(--primary) 42%, var(--border, var(--line)));
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--line));
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spring-card, .toast-enter, .toast-bar { animation: none !important; }
+  .spring-card, .toast-enter, .toast-bar, .pulse-line { animation: none !important; stroke-dashoffset: 0 !important; }
   .spring-btn, .bento-card { transition: none !important; }
 }

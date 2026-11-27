@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { signIn } from "@/auth";
+import { MvaBrand } from "@/components/mva-brand";
 
 export const metadata = { title: "Entrar" };
 
 export default function Login() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <section className="card bento-card spring-card flex w-full max-w-sm flex-col items-center gap-5 p-8 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-primary" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-        </span>
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">MY-VIEW</h1>
-          <p className="mt-1 text-mute">Seu dia em um só lugar: agenda, tarefas e e-mails.</p>
+    <main className="theme-ink relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <div className="dot-grid pointer-events-none absolute inset-0 opacity-30" aria-hidden="true" />
+      <section className="card bento-card spring-card relative z-10 flex w-full max-w-sm flex-col items-start gap-6 p-8">
+        <MvaBrand />
+        <div className="flex flex-col gap-2">
+          <span className="kicker">Acesso restrito</span>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Entrar no MY-VIEW</h1>
+          <p className="text-sm leading-relaxed text-mute">
+            Seu dia em um só lugar: agenda, tarefas, e-mails e base de conhecimento.
+          </p>
         </div>
         <form
           className="w-full"
@@ -24,12 +24,17 @@ export default function Login() {
             await signIn("google", { redirectTo: "/" });
           }}
         >
-          <button type="submit" className="btn btn-primary spring-btn w-full py-3 text-base">Entrar com Google</button>
+          <button type="submit" className="btn btn-primary spring-btn min-h-12 w-full text-[15px]">
+            Entrar com Google
+          </button>
         </form>
-        <footer className="flex items-center justify-center gap-3 text-xs text-mute">
-          <Link href="/privacidade" className="hover:underline">Política de Privacidade</Link>
-          <span aria-hidden="true">·</span>
-          <Link href="/termos" className="hover:underline">Termos de Serviço</Link>
+        <footer className="flex w-full items-center justify-between border-t border-line pt-4 text-xs text-mute">
+          <Link href="/" className="text-mute no-underline hover:text-ink">Início</Link>
+          <div className="flex items-center gap-3">
+            <Link href="/privacidade" className="text-mute no-underline hover:text-ink">Privacidade</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/termos" className="text-mute no-underline hover:text-ink">Termos</Link>
+          </div>
         </footer>
       </section>
     </main>

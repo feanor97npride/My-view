@@ -8,6 +8,7 @@ import AlertsPopup from "@/components/alerts-popup";
 import AssistantDrawer, { AssistantTrigger } from "@/components/assistant-drawer";
 import CommandPalette, { CommandTrigger } from "@/components/command-palette";
 import MeetingBanner from "@/components/meeting-banner";
+import { MvaBrand } from "@/components/mva-brand";
 import NavLinks from "@/components/nav-links";
 import QuickDictate from "@/components/quick-dictate";
 import SidebarShell, { type SidebarMeeting } from "@/components/sidebar-shell";
@@ -15,17 +16,7 @@ import ThemeToggle from "@/components/theme-toggle";
 import VoiceAssistantMode, { VoiceModeTrigger } from "@/components/voice-assistant-mode";
 
 function Brand() {
-  return (
-    <div className="flex shrink-0 items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary md:h-[34px] md:w-[34px]" aria-hidden="true">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 7v5l3 2" />
-        </svg>
-      </span>
-      <span className="whitespace-nowrap font-display text-lg font-bold md:text-xl">My View</span>
-    </div>
-  );
+  return <MvaBrand showSub={false} />;
 }
 
 function SignOut() {

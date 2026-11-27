@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import { MvaBrand } from "@/components/mva-brand";
 import NavLinks from "@/components/nav-links";
 import { DictateTrigger } from "@/components/quick-dictate";
 
@@ -63,14 +64,8 @@ export default function SidebarShell({
       }`}
     >
       <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between gap-2"}`}>
-        <Link href="/" className="flex items-center gap-2.5 text-ink no-underline" title="My View">
-          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
-            </svg>
-          </span>
-          {!collapsed && <span className="font-display text-xl font-bold tracking-tight">My View</span>}
+        <Link href="/" className="flex items-center text-ink no-underline" title="MY-VIEW · MVA Solutions">
+          <MvaBrand compact={collapsed} />
         </Link>
 
         <button
