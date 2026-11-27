@@ -35,7 +35,7 @@ export default function PrivacidadePage() {
         <section className="flex flex-col gap-2 text-sm leading-relaxed">
           <h2 className="font-display text-lg font-semibold">1. Quem somos e escopo desta política</h2>
           <p>
-            O <strong>MY-VIEW</strong> (<a href="https://my-view-rho.vercel.app/" className="underline">https://my-view-rho.vercel.app/</a>) é um painel pessoal de produtividade que reúne agenda, tarefas, e-mails e arquivos em um só lugar.
+            O <strong>MY-VIEW</strong> (<a href="https://www.mvasolutions.online/" className="underline">https://www.mvasolutions.online/</a>) é um painel pessoal de produtividade que reúne agenda, tarefas, e-mails e arquivos em um só lugar.
             Esta Política de Privacidade explica de forma transparente quais dados coletamos, por que os solicitamos, como os utilizamos, onde são armazenados e como você pode controlá-los ou excluí-los.
           </p>
         </section>
@@ -161,7 +161,7 @@ export default function PrivacidadePage() {
         <section className="flex flex-col gap-2 border-t border-line pt-4 text-xs leading-relaxed text-mute">
           <h2 className="font-display text-sm font-semibold text-ink">English Summary — Google API User Data Disclosure</h2>
           <p>
-            <strong>MY-VIEW</strong> (<a href="https://my-view-rho.vercel.app/" className="underline">https://my-view-rho.vercel.app/</a>) accesses Google user data (basic profile, Google Calendar events, Gmail metadata/drafts/filters, and Google Drive files) solely to provide personal productivity features to the signed-in user. Full email bodies are never stored in our database. We do not sell, rent, or share Google user data with third parties for advertising or AI model training. MY-VIEW&apos;s use and transfer of information received from Google APIs adheres to the{" "}
+            <strong>MY-VIEW</strong> (<a href="https://www.mvasolutions.online/" className="underline">https://www.mvasolutions.online/</a>) accesses Google user data (basic profile, Google Calendar events, Gmail metadata/drafts/filters, and Google Drive files) solely to provide personal productivity features to the signed-in user. Full email bodies are never stored in our database. We do not sell, rent, or share Google user data with third parties for advertising or AI model training. MY-VIEW&apos;s use and transfer of information received from Google APIs adheres to the{" "}
             <a
               href="https://developers.google.com/terms/api-services-user-data-policy"
               target="_blank"
