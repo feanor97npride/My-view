@@ -261,28 +261,28 @@ export default async function Home() {
           </div>
 
           <div aria-label="Resumo" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
-              <div className="text-[11px] text-mute">Agenda</div>
-              <div className="font-display text-xl font-bold tabular-nums">
+            <div className="kpi-tile px-3.5 py-2.5">
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-mute">Agenda</div>
+              <div className="mt-0.5 font-display text-xl font-bold tabular-nums">
                 {today ? today.events.length : "–"}
                 {nextEvent && <span className="ml-1 text-xs font-normal text-mute">({fmt(nextEvent.start)})</span>}
               </div>
             </div>
-            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
-              <div className="text-[11px] text-mute">Atrasadas</div>
-              <div className="font-display text-xl font-bold tabular-nums" style={Array.isArray(tasks) && overdue > 0 ? { color: "var(--red-fg)" } : undefined}>
+            <div className="kpi-tile px-3.5 py-2.5">
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-mute">Atrasadas</div>
+              <div className="mt-0.5 font-display text-xl font-bold tabular-nums" style={Array.isArray(tasks) && overdue > 0 ? { color: "var(--red-fg)" } : undefined}>
                 {Array.isArray(tasks) ? overdue : "–"}
               </div>
             </div>
-            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
-              <div className="text-[11px] text-mute">Vencem hoje</div>
-              <div className="font-display text-xl font-bold tabular-nums" style={Array.isArray(tasks) && dueToday > 0 ? { color: "var(--amber-fg)" } : undefined}>
+            <div className="kpi-tile px-3.5 py-2.5">
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-mute">Vencem hoje</div>
+              <div className="mt-0.5 font-display text-xl font-bold tabular-nums" style={Array.isArray(tasks) && dueToday > 0 ? { color: "var(--amber-fg)" } : undefined}>
                 {Array.isArray(tasks) ? dueToday : "–"}
               </div>
             </div>
-            <div className="rounded-2xl border border-line bg-bg px-3.5 py-2.5">
-              <div className="text-[11px] text-mute">E-mails ação</div>
-              <div className="font-display text-xl font-bold tabular-nums text-primary">
+            <div className="kpi-tile px-3.5 py-2.5">
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-mute">E-mails ação</div>
+              <div className="mt-0.5 font-display text-xl font-bold tabular-nums text-primary">
                 {mail && !(mail instanceof Error) ? actions.length : "–"}
               </div>
             </div>

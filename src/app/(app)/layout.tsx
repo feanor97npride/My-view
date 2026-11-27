@@ -137,7 +137,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Suspense fallback={null}>
           <LiveMeetingBanner />
         </Suspense>
-        <div id="conteudo" tabIndex={-1} className="outline-none">
+        <div id="conteudo" tabIndex={-1} className="page-enter outline-none">
           {children}
         </div>
       </div>
