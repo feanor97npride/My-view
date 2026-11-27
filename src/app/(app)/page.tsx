@@ -6,6 +6,7 @@ import DayPlan from "@/components/day-plan";
 import DayRing from "@/components/day-ring";
 import HomeActionEmails from "@/components/home-action-emails";
 import LiveMeeting from "@/components/live-meeting";
+import NewsletterPlayer from "@/components/newsletter-player";
 import ProactivePlan from "@/components/proactive-plan";
 import PublicHome from "@/components/public-home";
 import QuickNotes from "@/components/quick-notes";
@@ -17,9 +18,10 @@ import TodayTasks from "@/components/today-tasks";
 import { busyHours, timeline } from "@/lib/calendar";
 import { cachedListStatuses, openTasks } from "@/lib/clickup";
 import { staticAlerts, summarize } from "@/lib/day-summary";
-import { gmailThreadUrl } from "@/lib/email-view";
+import { gmailThreadUrl, shortDate } from "@/lib/email-view";
 import { originsByTask } from "@/lib/links";
 import { awaitingReply, syncEmails } from "@/lib/gmail";
+import { matchesNewsletter } from "@/lib/newsletter";
 import {
   type AutomationState,
   DEFAULT_AUTOMATIONS,
@@ -29,6 +31,7 @@ import {
   getAwaitingDays,
   getCachedDailyBriefing,
   getMeetingWindow,
+  getNewsletterRules,
   getPlanPrefs,
   getQuickNotes,
   getSelectedCalendars,
@@ -47,7 +50,7 @@ export default async function Home() {
   const email = session?.user?.email;
 
   // Rodada 1: preferências, tarefas e e-mails em paralelo (sem waterfall sequencial)
-  const [selected, windowMin, planPrefs, awaitingDays, quickNotes, automationPrefs, automationState, autoReadRules, tasks, mail] = await Promise.all([
+  const [selected, windowMin, planPrefs, awaitingDays, quickNotes, automationPrefs, automationState, autoReadRules, newsletterRules, tasks, mail] = await Promise.all([
     getSelectedCalendars().catch(() => null),
     getMeetingWindow().catch(() => 30),
     getPlanPrefs().catch(() => DEFAULT_PLAN),
@@ -56,6 +59,7 @@ export default async function Home() {
     getAutomationPrefs().catch(() => DEFAULT_AUTOMATIONS),
     getAutomationState().catch((): AutomationState => ({})),
     getAutoReadEmailRules().catch(() => []),
+    getNewsletterRules().catch(() => []),
     openTasks().catch((e: Error) => e),
     token ? syncEmails(token).catch((e: Error) => e) : Promise.resolve(null),
   ]);
@@ -88,6 +92,23 @@ export default async function Home() {
   const dueToday = Array.isArray(tasks) ? tasks.filter((t) => t.bucket === "today").length : 0;
   const account = session?.user?.email ?? "";
   const actions = mail && !(mail instanceof Error) ? mail.emails.filter((e) => filaOf(e.category) === "acao" && e.unread) : [];
+  const newsletters =
+    mail && !(mail instanceof Error)
+      ? mail.emails
+          .filter((e) => matchesNewsletter(e, newsletterRules))
+          .slice(0, 4)
+          .map((e) => ({
+            id: e.id,
+            threadId: e.threadId,
+            sender: e.sender,
+            subject: e.subject,
+            snippet: e.snippet,
+            receivedAt: e.receivedAt.toISOString(),
+            when: shortDate(e.receivedAt, now, tz),
+            unread: e.unread,
+            url: gmailThreadUrl(account, e.threadId),
+          }))
+      : [];
   const nextEvent = today?.events.find((e) => !e.allDay && e.start > now);
 
   // Summary and alerts: a source that failed is null, so it is left out instead of showing a false zero.
@@ -394,6 +415,12 @@ export default async function Home() {
           )}
         </section>
       </div>
+
+      {mail && !(mail instanceof Error) && (
+        <div className="spring-card spring-d3">
+          <NewsletterPlayer items={newsletters} mode="compact" />
+        </div>
+      )}
     </main>
   );
 }

@@ -111,6 +111,7 @@ export default function CommandPalette() {
       { id: "semana", label: "Ir para Semana", group: "Navegação", keywords: "calendario carga dias", run: () => { setOpen(false); router.push("/semana"); } },
       { id: "clickup", label: "Ir para ClickUp", group: "Navegação", keywords: "tarefas sprint listas kanban", run: () => { setOpen(false); router.push("/clickup"); } },
       { id: "emails", label: "Ir para E-mails", group: "Navegação", keywords: "triagem inbox gmail", run: () => { setOpen(false); router.push("/emails"); } },
+      { id: "newsletters", label: "Ir para Newsletters em Áudio", group: "Navegação", keywords: "newsletter audio ia geopolitica resumo ouvir", run: () => { setOpen(false); router.push("/newsletters"); } },
       { id: "drive", label: "Ir para Google Drive", group: "Navegação", keywords: "drive arquivos docs planilhas pdf", run: () => { setOpen(false); router.push("/drive"); } },
       { id: "emails-acao", label: "E-mails: Fila Ação", group: "E-mails", keywords: "urgente responder", run: () => { setOpen(false); router.push("/emails?categoria=acao"); } },
       { id: "emails-fin", label: "E-mails: Fila Financeiro", group: "E-mails", keywords: "boletos contas pagar", run: () => { setOpen(false); router.push("/emails?categoria=financeiro"); } },

@@ -88,6 +88,91 @@ export async function getAttachment(token: string, messageId: string, attachment
   return Buffer.from(b64, "base64");
 }
 
+type FullPart = {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: FullPart[];
+};
+
+function decodeBase64Url(data: string): string {
+  const b64 = data.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(b64, "base64").toString("utf8");
+}
+
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function collectPartText(part: FullPart | undefined, targetMime: "text/plain" | "text/html"): string[] {
+  if (!part) return [];
+  const out: string[] = [];
+  if (part.mimeType?.toLowerCase().startsWith(targetMime) && part.body?.data) {
+    out.push(decodeBase64Url(part.body.data));
+  }
+  for (const child of part.parts ?? []) {
+    out.push(...collectPartText(child, targetMime));
+  }
+  return out;
+}
+
+// Fetches clean readable text on demand (in memory only — never stored in Postgres).
+export async function getEmailPlainText(token: string, messageId: string): Promise<string> {
+  const msg = await gget<{ snippet?: string; payload?: FullPart }>(
+    `/messages/${encodeURIComponent(messageId)}?format=full`,
+    token,
+  );
+  const plainParts = collectPartText(msg.payload, "text/plain");
+  let raw = plainParts.join("\n").trim();
+  if (!raw) {
+    const htmlParts = collectPartText(msg.payload, "text/html");
+    raw = stripHtmlToText(htmlParts.join("\n")).trim();
+  }
+  if (!raw) raw = msg.snippet ?? "";
+  return raw
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 12_000);
+}
+
+export async function summarizeNewsletterWithAI(subject: string, bodyText: string): Promise<string> {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key) throw new Error("ANTHROPIC_API_KEY não configurada");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    signal: AbortSignal.timeout(12000),
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 700,
+      messages: [
+        {
+          role: "user",
+          content: `Faça um resumo falado executivo em português (para ouvir em cerca de 30 segundos, 3 a 5 frases curtas e naturais, sem markdown nem símbolos) dos principais destaques desta newsletter.\n\nAssunto: ${subject}\n\nConteúdo:\n${bodyText.slice(0, 7000)}`,
+        },
+      ],
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}`);
+  const j = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const text = j.content?.find((b) => b.type === "text")?.text?.trim();
+  if (!text) throw new Error("A IA não retornou um resumo.");
+  return text;
+}
+
 async function mapConcurrent<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;

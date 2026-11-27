@@ -9,6 +9,7 @@ import { normalizeWindow } from "./day-summary";
 import { normalizeAwaitingDays } from "./email-view";
 import { DEFAULT_PLAN, normalizePlanPrefs, type PlanPrefs } from "./task-dates";
 import { normalizeRule, QUEUE_CATEGORIES, type CustomCategory, type EmailRule, type QueueCategory } from "./email-rules";
+import { DEFAULT_NEWSLETTER_RULES, normalizeNewsletterText } from "./newsletter";
 import { getCurrentUserEmail } from "./user";
 
 const CALENDARS = "calendars";
@@ -32,6 +33,7 @@ const AUTOMATION_PREFS = "automation_prefs";
 const DAILY_BRIEFING_CACHE = "daily_briefing_cache";
 const AUTOMATION_STATE = "automation_state";
 const AUTO_READ_EMAILS = "auto_read_emails";
+const NEWSLETTER_RULES = "newsletter_rules";
 
 export type ReplyTemplate = { id: string; label: string; body: string };
 export type StoredChatMsg = { role: "user" | "assistant"; content: string; actions?: string[] };
@@ -458,4 +460,32 @@ export async function getAutoReadEmailRules(): Promise<string[]> {
 export async function setAutoReadEmailRules(rules: string[]): Promise<void> {
   const clean = [...new Set(rules.map((s) => s.trim().toLowerCase().slice(0, 100)).filter(Boolean))].slice(0, 30);
   await upsertPref(AUTO_READ_EMAILS, clean);
+}
+
+export async function getNewsletterRules(): Promise<string[]> {
+  const map = await loadPrefsMap();
+  const raw = map[NEWSLETTER_RULES];
+  if (!Array.isArray(raw)) return DEFAULT_NEWSLETTER_RULES;
+  const clean = [
+    ...new Set(
+      raw
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => normalizeNewsletterText(s).slice(0, 120))
+        .filter(Boolean),
+    ),
+  ].slice(0, 30);
+  return clean.length > 0 ? clean : DEFAULT_NEWSLETTER_RULES;
+}
+
+export async function setNewsletterRules(rules: string[]): Promise<string[]> {
+  const clean = [
+    ...new Set(
+      rules
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => normalizeNewsletterText(s).slice(0, 120))
+        .filter(Boolean),
+    ),
+  ].slice(0, 30);
+  await upsertPref(NEWSLETTER_RULES, clean);
+  return clean;
 }
