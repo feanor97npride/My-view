@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
-const PUBLIC_PATHS = ["/login", "/privacidade", "/termos"];
+// /api/kb/status só expõe metadados (contagens e sha), nenhum texto de registro.
+const PUBLIC_PATHS = ["/login", "/privacidade", "/termos", "/api/kb/status"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

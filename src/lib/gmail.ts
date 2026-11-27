@@ -157,7 +157,7 @@ async function fallbackEmailsFromDb(userEmail: string) {
   const counts = await fetchEmailCountsByUser(userEmail);
   return {
     counts,
-    emails: rows.map((r) => ({
+    emails: rows.map((r): Omit<EmailItem, "receivedAt"> & { receivedAt: string } => ({
       id: String(r.id),
       threadId: String(r.id),
       sender: String(r.sender ?? ""),
